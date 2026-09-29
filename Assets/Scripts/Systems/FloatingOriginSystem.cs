@@ -5,7 +5,7 @@ using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(PlayerInputAndMotionSystem))]
     public partial struct FloatingOriginSystem : ISystem
@@ -74,7 +74,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithNone(typeof(PlayerTag))]
     public partial struct ShiftPositionsJob : IJobEntity
     {

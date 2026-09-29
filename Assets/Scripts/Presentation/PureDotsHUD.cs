@@ -31,11 +31,42 @@ namespace GameHolder.PureDots
         private bool m_GodMode;
         private bool m_AutoAttackEnabled = true;
 
+        // Zero-allocation cached string buffers
+        private string m_CachedFpsText = "<b>FPS:</b> -- (- ms)";
+        private string m_CachedEnemiesText = "";
+        private string m_CachedProjectilesText = "";
+        private string m_CachedGemsText = "";
+        private string m_CachedTotalGemsText = "";
+        private string m_CachedLevelText = "";
+        private string m_CachedHpBarText = "";
+        private string m_CachedCoordsText = "";
+        private string m_CachedRebaseText = "";
+        private string m_CachedRebaseCountText = "";
+        private string m_CachedGameOverLevelText = "";
+        private string m_CachedGameOverGemsText = "";
+        private string m_CachedGameOverSwarmText = "";
+
+        private int m_PrevEnemiesCount = -1;
+        private int m_PrevProjectilesCount = -1;
+        private int m_PrevGemsCount = -1;
+        private int m_PrevTotalGemsCollected = -1;
+        private uint m_PrevPlayerLevel = 0;
+        private uint m_PrevPlayerExperience = uint.MaxValue;
+        private int m_PrevPlayerHealthInt = -1;
+        private int m_PrevPlayerMaxHealthInt = -1;
+        private int m_PrevPlayerInvulnInt = -1;
+        private int m_PrevCoordsX10 = int.MinValue;
+        private int m_PrevCoordsY10 = int.MinValue;
+        private int m_PrevDistanceToRebaseInt = -1;
+        private int m_PrevRebaseCount = -1;
+
         private GUIStyle m_TitleStyle;
         private GUIStyle m_PanelStyle;
         private GUIStyle m_LabelStyle;
         private GUIStyle m_HeaderStyle;
         private GUIStyle m_ButtonStyle;
+        private GUIStyle m_DeathTitleStyle;
+        private GUIStyle m_RespawnBtnStyle;
         private bool m_StylesInitialized;
 
         private void Awake()
@@ -69,6 +100,7 @@ namespace GameHolder.PureDots
                 m_FrameTimeMs = (m_DeltaTimeAccumulator / m_FrameCount) * 1000.0f;
                 m_FrameCount = 0;
                 m_DeltaTimeAccumulator = 0.0f;
+                m_CachedFpsText = $"<b>FPS:</b> {m_Fps:F1} ({m_FrameTimeMs:F1} ms)";
             }
 
             // Query ECS world metrics safely
@@ -118,6 +150,75 @@ namespace GameHolder.PureDots
                 m_PlayerIsDead = stats.IsDead != 0;
                 m_PlayerCoords = new Vector2(transform.Position.x, transform.Position.y);
             }
+
+            // Update cached UI strings only on state change to guarantee zero-allocation OnGUI passes
+            if (m_ActiveEnemiesCount != m_PrevEnemiesCount)
+            {
+                m_PrevEnemiesCount = m_ActiveEnemiesCount;
+                m_CachedEnemiesText = $"• Active Swarm Enemies: <b>{m_ActiveEnemiesCount}</b> / {EnemyPoolSingleton.Capacity:N0}";
+                m_CachedGameOverSwarmText = $"• Swarm Eliminations: <b>{EnemyPoolSingleton.Capacity - m_ActiveEnemiesCount}</b>";
+            }
+
+            if (m_ActiveProjectilesCount != m_PrevProjectilesCount)
+            {
+                m_PrevProjectilesCount = m_ActiveProjectilesCount;
+                m_CachedProjectilesText = $"• Active Projectiles: <b>{m_ActiveProjectilesCount}</b> / {PlayerProjectilePoolSingleton.Capacity:N0}";
+            }
+
+            if (m_ActiveGemsCount != m_PrevGemsCount)
+            {
+                m_PrevGemsCount = m_ActiveGemsCount;
+                m_CachedGemsText = $"• Active Gems in Field: <b>{m_ActiveGemsCount}</b> / {GemPoolSingleton.Capacity:N0} (L1 Cache)";
+            }
+
+            if (m_TotalGemsCollected != m_PrevTotalGemsCollected)
+            {
+                m_PrevTotalGemsCollected = m_TotalGemsCollected;
+                m_CachedTotalGemsText = $"• Total Gems Collected: <b>{m_TotalGemsCollected}</b> EXP";
+                m_CachedGameOverGemsText = $"• Total Gems Collected: <b>{m_TotalGemsCollected}</b> EXP";
+            }
+
+            if (m_PlayerLevel != m_PrevPlayerLevel || m_PlayerExperience != m_PrevPlayerExperience)
+            {
+                m_PrevPlayerLevel = m_PlayerLevel;
+                m_PrevPlayerExperience = m_PlayerExperience;
+                m_CachedLevelText = $"• Level: <b>{m_PlayerLevel}</b>  (EXP: {m_PlayerExperience} / {m_PlayerLevel * SimulationConstants.ExpPerLevelMultiplier})";
+                m_CachedGameOverLevelText = $"• Final Level: <b>{m_PlayerLevel}</b>";
+            }
+
+            int hpInt = (int)m_PlayerHealth;
+            int maxHpInt = (int)m_PlayerMaxHealth;
+            int invulnInt = (int)(m_PlayerInvulnTimer * 10.0f);
+            if (hpInt != m_PrevPlayerHealthInt || maxHpInt != m_PrevPlayerMaxHealthInt || invulnInt != m_PrevPlayerInvulnInt)
+            {
+                m_PrevPlayerHealthInt = hpInt;
+                m_PrevPlayerMaxHealthInt = maxHpInt;
+                m_PrevPlayerInvulnInt = invulnInt;
+                m_CachedHpBarText = $"HP: {m_PlayerHealth:F0}/{m_PlayerMaxHealth:F0} " + (m_PlayerInvulnTimer > 0 ? $"[i-FRAME {m_PlayerInvulnTimer:F2}s]" : "");
+            }
+
+            int cx10 = (int)(m_PlayerCoords.x * 10.0f);
+            int cy10 = (int)(m_PlayerCoords.y * 10.0f);
+            if (cx10 != m_PrevCoordsX10 || cy10 != m_PrevCoordsY10)
+            {
+                m_PrevCoordsX10 = cx10;
+                m_PrevCoordsY10 = cy10;
+                m_CachedCoordsText = $"• Local Coords: ({m_PlayerCoords.x:F1}, {m_PlayerCoords.y:F1})";
+            }
+
+            float distFromOrigin = m_PlayerCoords.magnitude;
+            int distInt = (int)distFromOrigin;
+            if (distInt != m_PrevDistanceToRebaseInt)
+            {
+                m_PrevDistanceToRebaseInt = distInt;
+                m_CachedRebaseText = $"• Distance to Rebase: {distFromOrigin:F0}m / {SimulationConstants.FloatingOriginThreshold:N0}m";
+            }
+
+            if (m_RebaseCount != m_PrevRebaseCount)
+            {
+                m_PrevRebaseCount = m_RebaseCount;
+                m_CachedRebaseCountText = $"• Total Rebases: <b>{m_RebaseCount}</b>";
+            }
         }
 
         private void InitStyles()
@@ -161,6 +262,19 @@ namespace GameHolder.PureDots
                 fontStyle = FontStyle.Bold,
                 fixedHeight = 26
             };
+
+            m_DeathTitleStyle = new GUIStyle(m_TitleStyle)
+            {
+                fontSize = 22,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1.0f, 0.25f, 0.25f) }
+            };
+
+            m_RespawnBtnStyle = new GUIStyle(m_ButtonStyle)
+            {
+                fixedHeight = 36,
+                fontSize = 14
+            };
         }
 
         private void OnGUI()
@@ -178,22 +292,21 @@ namespace GameHolder.PureDots
                 Color fpsColor = m_Fps >= 55 ? Color.green : (m_Fps >= 30 ? Color.yellow : Color.red);
                 var prevColor = GUI.color;
                 GUI.color = fpsColor;
-                GUILayout.Label($"<b>FPS:</b> {m_Fps:F1} ({m_FrameTimeMs:F1} ms)", m_HeaderStyle);
+                GUILayout.Label(m_CachedFpsText, m_HeaderStyle);
                 GUI.color = prevColor;
 
                 GUILayout.Space(6);
                 GUILayout.Label("--- SIMULATION METRICS ---", m_HeaderStyle);
-                GUILayout.Label($"• Active Swarm Enemies: <b>{m_ActiveEnemiesCount}</b> / {EnemyPoolSingleton.Capacity:N0}", m_LabelStyle);
-                GUILayout.Label($"• Active Projectiles: <b>{m_ActiveProjectilesCount}</b> / {PlayerProjectilePoolSingleton.Capacity:N0}", m_LabelStyle);
-                GUILayout.Label($"• Active Gems in Field: <b>{m_ActiveGemsCount}</b> / {GemPoolSingleton.Capacity:N0} (L1 Cache)", m_LabelStyle);
-                GUILayout.Label($"• Total Gems Collected: <b>{m_TotalGemsCollected}</b> EXP", m_LabelStyle);
+                GUILayout.Label(m_CachedEnemiesText, m_LabelStyle);
+                GUILayout.Label(m_CachedProjectilesText, m_LabelStyle);
+                GUILayout.Label(m_CachedGemsText, m_LabelStyle);
+                GUILayout.Label(m_CachedTotalGemsText, m_LabelStyle);
 
                 GUILayout.Space(6);
                 GUILayout.Label("--- PLAYER STATUS ---", m_HeaderStyle);
-                GUILayout.Label($"• Level: <b>{m_PlayerLevel}</b>  (EXP: {m_PlayerExperience} / {m_PlayerLevel * SimulationConstants.ExpPerLevelMultiplier})", m_LabelStyle);
+                GUILayout.Label(m_CachedLevelText, m_LabelStyle);
                 float hpPercent = m_PlayerMaxHealth > 0 ? Mathf.Clamp01(m_PlayerHealth / m_PlayerMaxHealth) : 0;
-                string hpBar = $"HP: {m_PlayerHealth:F0}/{m_PlayerMaxHealth:F0} " + (m_PlayerInvulnTimer > 0 ? $"[i-FRAME {m_PlayerInvulnTimer:F2}s]" : "");
-                GUILayout.Label(hpBar, m_LabelStyle);
+                GUILayout.Label(m_CachedHpBarText, m_LabelStyle);
 
                 // Simple HP Visual Bar
                 Rect barRect = GUILayoutUtility.GetRect(290, 14);
@@ -207,10 +320,9 @@ namespace GameHolder.PureDots
 
                 GUILayout.Space(6);
                 GUILayout.Label("--- FLOATING ORIGIN ---", m_HeaderStyle);
-                float distFromOrigin = m_PlayerCoords.magnitude;
-                GUILayout.Label($"• Local Coords: ({m_PlayerCoords.x:F1}, {m_PlayerCoords.y:F1})", m_LabelStyle);
-                GUILayout.Label($"• Distance to Rebase: {distFromOrigin:F0}m / {SimulationConstants.FloatingOriginThreshold:N0}m", m_LabelStyle);
-                GUILayout.Label($"• Total Rebases: <b>{m_RebaseCount}</b>", m_LabelStyle);
+                GUILayout.Label(m_CachedCoordsText, m_LabelStyle);
+                GUILayout.Label(m_CachedRebaseText, m_LabelStyle);
+                GUILayout.Label(m_CachedRebaseCountText, m_LabelStyle);
 
                 GUILayout.Space(8);
                 GUILayout.Label("<color=#77aaff>Controls:</color> W/A/S/D or Arrows to Move\nProjectiles auto-fire in 3-way spread pattern", m_LabelStyle);
@@ -251,14 +363,12 @@ namespace GameHolder.PureDots
                 }
 
                 GUILayout.Space(6);
-                string godModeText = m_GodMode ? "God Mode: [ON]" : "God Mode: [OFF]";
-                if (GUILayout.Button(godModeText, m_ButtonStyle))
+                if (GUILayout.Button(m_GodMode ? "God Mode: [ON]" : "God Mode: [OFF]", m_ButtonStyle))
                 {
                     m_GodMode = !m_GodMode;
                 }
 
-                string autoAttackText = m_AutoAttackEnabled ? "Auto-Attack: [ON]" : "Auto-Attack: [OFF]";
-                if (GUILayout.Button(autoAttackText, m_ButtonStyle))
+                if (GUILayout.Button(m_AutoAttackEnabled ? "Auto-Attack: [ON]" : "Auto-Attack: [OFF]", m_ButtonStyle))
                 {
                     m_AutoAttackEnabled = !m_AutoAttackEnabled;
                     ToggleAutoAttack(m_AutoAttackEnabled);
@@ -276,26 +386,15 @@ namespace GameHolder.PureDots
                 GUILayout.BeginArea(modalRect, m_PanelStyle);
                 {
                     GUILayout.Space(8);
-                    var deathTitle = new GUIStyle(m_TitleStyle)
-                    {
-                        fontSize = 22,
-                        alignment = TextAnchor.MiddleCenter,
-                        normal = { textColor = new Color(1.0f, 0.25f, 0.25f) }
-                    };
-                    GUILayout.Label("☠️ YOU DIED ☠️", deathTitle);
+                    GUILayout.Label("☠️ YOU DIED ☠️", m_DeathTitleStyle);
                     GUILayout.Space(12);
 
-                    GUILayout.Label($"• Final Level: <b>{m_PlayerLevel}</b>", m_LabelStyle);
-                    GUILayout.Label($"• Total Gems Collected: <b>{m_TotalGemsCollected}</b> EXP", m_LabelStyle);
-                    GUILayout.Label($"• Swarm Eliminations: <b>{EnemyPoolSingleton.Capacity - m_ActiveEnemiesCount}</b>", m_LabelStyle);
+                    GUILayout.Label(m_CachedGameOverLevelText, m_LabelStyle);
+                    GUILayout.Label(m_CachedGameOverGemsText, m_LabelStyle);
+                    GUILayout.Label(m_CachedGameOverSwarmText, m_LabelStyle);
 
                     GUILayout.Space(16);
-                    var respawnBtnStyle = new GUIStyle(m_ButtonStyle)
-                    {
-                        fixedHeight = 36,
-                        fontSize = 14
-                    };
-                    if (GUILayout.Button("🔄 RESPAWN & RESTART RUN", respawnBtnStyle))
+                    if (GUILayout.Button("🔄 RESPAWN & RESTART RUN", m_RespawnBtnStyle))
                     {
                         RespawnPlayer();
                     }

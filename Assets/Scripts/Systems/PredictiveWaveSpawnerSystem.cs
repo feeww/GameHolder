@@ -7,7 +7,7 @@ using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(FloatingOriginSystem))]
     public partial struct PredictiveWaveSpawnerSystem : ISystem

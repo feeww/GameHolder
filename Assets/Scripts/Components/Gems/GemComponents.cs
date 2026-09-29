@@ -31,7 +31,7 @@ namespace GameHolder.PureDots
 
     public struct GemPoolSingleton : IComponentData
     {
-        public const int Capacity = 1024; // Single Source of Truth
+        public const int Capacity = SimulationConstants.MaxGems; // Single Source of Truth
         public UnsafeQueue<Entity> FreeGems;
         public UnsafeList<GemSpatialRecord> AllGems; // Exactly 1024 slots (32 KB, L1D cache)
     }

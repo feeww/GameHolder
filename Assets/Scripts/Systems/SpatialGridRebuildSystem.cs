@@ -83,7 +83,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(EnemyActiveTag))]
     public partial struct PopulateEnemySpatialGridJob : IJobEntity
     {
@@ -113,7 +113,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(ProjectileActiveTag), typeof(EnemyProjectileTag))]
     public partial struct PopulateProjectileSpatialGridJob : IJobEntity
     {

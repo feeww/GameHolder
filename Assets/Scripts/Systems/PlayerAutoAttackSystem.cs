@@ -1,5 +1,7 @@
+using System.Runtime.CompilerServices;
 using Unity.Burst;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Rendering;
@@ -7,7 +9,7 @@ using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateBefore(typeof(MovementAndCameraRelativeZSystem))]
     [UpdateAfter(typeof(PredictiveWaveSpawnerSystem))]
@@ -80,7 +82,8 @@ namespace GameHolder.PureDots
             m_MaterialMeshInfoLookup.Update(ref state);
             m_EnemyActiveLookup.Update(ref state);
 
-            // Find nearest active enemy within search radius
+            // Find nearest active enemy within search radius via concentric Chebyshev rings
+            const float cellSize = SimulationConstants.SpatialCellSize;
             const float invCellSize = SimulationConstants.SpatialInvCellSize;
             const float maxSearchRadius = SimulationConstants.AttackSearchRadius;
             float minDistanceSq = SimulationConstants.AttackSearchRadiusSq;
@@ -88,32 +91,38 @@ namespace GameHolder.PureDots
             bool hasTarget = false;
 
             int2 playerCell = SpatialHashUtils.QuantizeToCell(playerPos, invCellSize);
-            int cellRadius = (int)math.ceil(maxSearchRadius * invCellSize);
+            int maxRings = (int)math.ceil(maxSearchRadius * invCellSize);
 
-            for (int dy = -cellRadius; dy <= cellRadius; ++dy)
+            for (int ring = 0; ring <= maxRings; ++ring)
             {
-                for (int dx = -cellRadius; dx <= cellRadius; ++dx)
+                if (ring > 1)
                 {
-                    int2 targetCell = playerCell + new int2(dx, dy);
-                    uint hash = SpatialHashUtils.ComputeHash(targetCell);
-
-                    if (enemyGrid.TryGetFirstValue(hash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
+                    // Conservative minimum Euclidean distance from player to any cell in this ring
+                    float minRingDist = (ring - 1) * cellSize;
+                    if (minRingDist * minRingDist >= minDistanceSq)
                     {
-                        do
-                        {
-                            if (math.all(entry.CellCoord == targetCell) &&
-                                m_EnemyActiveLookup.HasComponent(entry.Entity) &&
-                                m_EnemyActiveLookup.IsComponentEnabled(entry.Entity))
-                            {
-                                float distSq = math.distancesq(playerPos, entry.Position);
-                                if (distSq < minDistanceSq)
-                                {
-                                    minDistanceSq = distSq;
-                                    targetPos = entry.Position;
-                                    hasTarget = true;
-                                }
-                            }
-                        } while (enemyGrid.TryGetNextValue(out entry, ref it));
+                        // Any remaining ring is strictly farther than our best candidate; terminate search
+                        break;
+                    }
+                }
+
+                if (ring == 0)
+                {
+                    ProbeCell(playerCell, playerPos, in enemyGrid, ref m_EnemyActiveLookup, ref minDistanceSq, ref targetPos, ref hasTarget);
+                }
+                else
+                {
+                    // Top and bottom horizontal edges
+                    for (int dx = -ring; dx <= ring; ++dx)
+                    {
+                        ProbeCell(playerCell + new int2(dx, ring), playerPos, in enemyGrid, ref m_EnemyActiveLookup, ref minDistanceSq, ref targetPos, ref hasTarget);
+                        ProbeCell(playerCell + new int2(dx, -ring), playerPos, in enemyGrid, ref m_EnemyActiveLookup, ref minDistanceSq, ref targetPos, ref hasTarget);
+                    }
+                    // Left and right vertical edges (excluding corners already probed)
+                    for (int dy = -ring + 1; dy <= ring - 1; ++dy)
+                    {
+                        ProbeCell(playerCell + new int2(-ring, dy), playerPos, in enemyGrid, ref m_EnemyActiveLookup, ref minDistanceSq, ref targetPos, ref hasTarget);
+                        ProbeCell(playerCell + new int2(ring, dy), playerPos, in enemyGrid, ref m_EnemyActiveLookup, ref minDistanceSq, ref targetPos, ref hasTarget);
                     }
                 }
             }
@@ -163,6 +172,37 @@ namespace GameHolder.PureDots
                 m_ProjectileActiveLookup.SetComponentEnabled(proj, true);
                 m_MaterialMeshInfoLookup[proj] = MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0);
                 m_MaterialMeshInfoLookup.SetComponentEnabled(proj, true);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ProbeCell(
+            int2 targetCell,
+            float2 playerPos,
+            in UnsafeParallelMultiHashMap<uint, GridEntry> enemyGrid,
+            ref ComponentLookup<EnemyActiveTag> enemyActiveLookup,
+            ref float minDistanceSq,
+            ref float2 targetPos,
+            ref bool hasTarget)
+        {
+            uint hash = SpatialHashUtils.ComputeHash(targetCell);
+            if (enemyGrid.TryGetFirstValue(hash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
+            {
+                do
+                {
+                    if (math.all(entry.CellCoord == targetCell) &&
+                        enemyActiveLookup.HasComponent(entry.Entity) &&
+                        enemyActiveLookup.IsComponentEnabled(entry.Entity))
+                    {
+                        float distSq = math.distancesq(playerPos, entry.Position);
+                        if (distSq < minDistanceSq)
+                        {
+                            minDistanceSq = distSq;
+                            targetPos = entry.Position;
+                            hasTarget = true;
+                        }
+                    }
+                } while (enemyGrid.TryGetNextValue(out entry, ref it));
             }
         }
 

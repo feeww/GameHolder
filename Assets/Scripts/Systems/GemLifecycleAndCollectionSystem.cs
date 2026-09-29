@@ -8,7 +8,7 @@ using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [UpdateInGroup(typeof(SimulationSystemGroup))]
     [UpdateAfter(typeof(DamageResolutionSystem))]
     [UpdateBefore(typeof(TransformSystemGroup))]
@@ -39,7 +39,7 @@ namespace GameHolder.PureDots
         }
 
         [BurstCompile]
-        public void OnUpdate(ref SystemState state)
+        public unsafe void OnUpdate(ref SystemState state)
         {
             ref var gemPool = ref SystemAPI.GetSingletonRW<GemPoolSingleton>().ValueRW;
             var gemSpawnQueue = SystemAPI.GetSingleton<GemSpawnQueueSingleton>().SpawnQueue;
@@ -124,19 +124,19 @@ namespace GameHolder.PureDots
                 int nearestOnScreenIdx = -1;
 
                 int gemCount = gemPool.AllGems.Length;
+                GemSpatialRecord* scanGemPtr = gemPool.AllGems.Ptr;
                 for (int i = 0; i < gemCount; i++)
                 {
-                    var record = gemPool.AllGems[i];
-                    if (record.IsActive == 0) continue;
+                    if (scanGemPtr[i].IsActive == 0) continue;
 
-                    float distToPlayerSq = math.distancesq(record.Position, playerPos);
+                    float distToPlayerSq = math.distancesq(scanGemPtr[i].Position, playerPos);
                     if (distToPlayerSq > offScreenDistSq && distToPlayerSq > maxDistSq)
                     {
                         maxDistSq = distToPlayerSq;
                         furthestOffScreenIdx = i;
                     }
 
-                    float distToReqSq = math.distancesq(record.Position, request.Position);
+                    float distToReqSq = math.distancesq(scanGemPtr[i].Position, request.Position);
                     if (distToReqSq < minDistanceToReqSq)
                     {
                         minDistanceToReqSq = distToReqSq;
@@ -201,31 +201,30 @@ namespace GameHolder.PureDots
             float magnetRadiusSq = magnetRadius * magnetRadius;
             int totalGems = gemPool.AllGems.Length;
             uint totalExpGained = 0;
+            GemSpatialRecord* gemPtr = gemPool.AllGems.Ptr;
 
             for (int i = 0; i < totalGems; i++)
             {
-                var record = gemPool.AllGems[i];
-                if (record.IsActive == 0) continue;
+                if (gemPtr[i].IsActive == 0) continue;
 
-                if (math.distancesq(record.Position, playerPos) <= magnetRadiusSq)
+                if (math.distancesq(gemPtr[i].Position, playerPos) <= magnetRadiusSq)
                 {
-                    totalExpGained += record.ExperienceValue;
+                    totalExpGained += gemPtr[i].ExperienceValue;
 
                     // Collect gem
                     if (hasBridge && bridgeQueues.GemCollectEventQueue.IsCreated)
                     {
                         bridgeQueues.GemCollectEventQueue.Enqueue(new GemCollectEvent
                         {
-                            Position = record.Position,
-                            ExperienceValue = record.ExperienceValue
+                            Position = gemPtr[i].Position,
+                            ExperienceValue = gemPtr[i].ExperienceValue
                         });
                     }
 
                     // Clear active record in cache
-                    record.IsActive = 0;
-                    gemPool.AllGems[i] = record;
+                    gemPtr[i].IsActive = 0;
 
-                    Entity gem = record.Entity;
+                    Entity gem = gemPtr[i].Entity;
                     m_GemActiveLookup.SetComponentEnabled(gem, false);
                     m_DisableRenderingLookup.SetComponentEnabled(gem, true);
                     m_MaterialMeshInfoLookup.SetComponentEnabled(gem, false);

@@ -82,7 +82,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(EnemyActiveTag))]
     public partial struct UpdateEnemiesJob : IJobEntity
     {
@@ -153,7 +153,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(ProjectileActiveTag))]
     public partial struct UpdateProjectilesJob : IJobEntity
     {
@@ -183,7 +183,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(PlayerTag))]
     public partial struct UpdatePlayerZJob : IJobEntity
     {
