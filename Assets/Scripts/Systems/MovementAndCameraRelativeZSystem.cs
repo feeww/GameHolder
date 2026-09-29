@@ -41,12 +41,10 @@ namespace GameHolder.PureDots
             }
 
             // Constants for Tier 1 / Tier 2 LOD
-            const float tier1Radius = 22.0f;
-            const float tier2MaxRadius = 45.0f;
-            const float tier1RadiusSq = tier1Radius * tier1Radius; // 484.0f
-            const float tier2MaxRadiusSq = tier2MaxRadius * tier2MaxRadius; // 2025.0f
+            const float tier1RadiusSq = SimulationConstants.Tier1RadiusSq;
+            const float tier2MaxRadiusSq = SimulationConstants.Tier2MaxRadiusSq;
             const float invBufferRangeSq = 1.0f / (tier2MaxRadiusSq - tier1RadiusSq);
-            const float maxCatchUpMultiplier = 3.0f;
+            const float maxCatchUpMultiplier = SimulationConstants.MaxCatchUpMultiplier;
 
             // 1. Update Enemies
             var updateEnemiesJob = new UpdateEnemiesJob
@@ -149,8 +147,7 @@ namespace GameHolder.PureDots
             pos.xy += velocity.Value * Dt;
 
             // Camera-relative Z depth calculation
-            float relativeY = math.clamp(pos.y - CameraBounds.CameraPosition.y, -CameraBounds.ViewportExtentY, CameraBounds.ViewportExtentY);
-            pos.z = CameraBounds.ZMinOffset + (relativeY + CameraBounds.ViewportExtentY) * CameraBounds.DepthScale;
+            pos.z = CameraBounds.CalculateDepth(pos.y);
 
             transform.Position = pos;
         }
@@ -174,8 +171,7 @@ namespace GameHolder.PureDots
             pos.xy += velocity.Value * Dt;
 
             // Camera-relative Z depth calculation
-            float relativeY = math.clamp(pos.y - CameraBounds.CameraPosition.y, -CameraBounds.ViewportExtentY, CameraBounds.ViewportExtentY);
-            pos.z = CameraBounds.ZMinOffset + (relativeY + CameraBounds.ViewportExtentY) * CameraBounds.DepthScale;
+            pos.z = CameraBounds.CalculateDepth(pos.y);
             transform.Position = pos;
 
             // Decrement remaining lifetime
@@ -196,8 +192,7 @@ namespace GameHolder.PureDots
         public void Execute(ref LocalTransform transform)
         {
             float3 pos = transform.Position;
-            float relativeY = math.clamp(pos.y - CameraBounds.CameraPosition.y, -CameraBounds.ViewportExtentY, CameraBounds.ViewportExtentY);
-            pos.z = CameraBounds.ZMinOffset + (relativeY + CameraBounds.ViewportExtentY) * CameraBounds.DepthScale;
+            pos.z = CameraBounds.CalculateDepth(pos.y);
             transform.Position = pos;
         }
     }

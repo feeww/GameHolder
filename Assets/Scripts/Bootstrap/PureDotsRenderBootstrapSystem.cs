@@ -51,8 +51,17 @@ namespace GameHolder.PureDots
             em.AddComponentData(playerPrefab, Unity.Transforms.LocalTransform.FromPosition(new Unity.Mathematics.float3(0, 0, 0)));
             em.AddComponentData(playerPrefab, new MovementVelocity { Value = Unity.Mathematics.float2.zero });
             em.AddComponentData(playerPrefab, new PlayerInputData { MoveInput = Unity.Mathematics.float2.zero });
-            em.AddComponentData(playerPrefab, new PlayerInvulnerability { Timer = 0.0f, InvulnerabilityDuration = 0.5f });
-            em.AddComponentData(playerPrefab, new PlayerStats { MoveSpeed = 6.0f, MagnetRadius = 4.0f, CurrentHealth = 100.0f, MaxHealth = 100.0f, Experience = 0, Level = 1, IsDead = 0 });
+            em.AddComponentData(playerPrefab, new PlayerInvulnerability { Timer = 0.0f, InvulnerabilityDuration = SimulationConstants.PlayerDefaultInvulnDuration });
+            em.AddComponentData(playerPrefab, new PlayerStats
+            {
+                MoveSpeed = SimulationConstants.PlayerDefaultMoveSpeed,
+                MagnetRadius = SimulationConstants.PlayerDefaultMagnetRadius,
+                CurrentHealth = SimulationConstants.PlayerDefaultMaxHealth,
+                MaxHealth = SimulationConstants.PlayerDefaultMaxHealth,
+                Experience = 0,
+                Level = 1,
+                IsDead = 0
+            });
             em.AddComponentData(playerPrefab, new PlayerTag());
 
             em.AddComponent<Prefab>(playerPrefab);
@@ -80,7 +89,12 @@ namespace GameHolder.PureDots
             RenderMeshUtility.AddComponents(playerProjPrefab, em, renderDesc, projRMA, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
             em.AddComponentData(playerProjPrefab, Unity.Transforms.LocalTransform.FromPosition(new Unity.Mathematics.float3(0, 0, 100)));
             em.AddComponentData(playerProjPrefab, new MovementVelocity());
-            em.AddComponentData(playerProjPrefab, new ProjectileData { Damage = 25.0f, Radius = 0.35f, RemainingLifetime = 1.8f });
+            em.AddComponentData(playerProjPrefab, new ProjectileData
+            {
+                Damage = SimulationConstants.PlayerProjectileDamage,
+                Radius = SimulationConstants.PlayerProjectileRadius,
+                RemainingLifetime = SimulationConstants.PlayerProjectileLifetime
+            });
             em.AddComponentData(playerProjPrefab, new SpriteUVOffset { Value = new Unity.Mathematics.float4(1, 1, 0, 0) });
             em.AddComponentData(playerProjPrefab, new PlayerProjectileTag());
             em.AddComponentData(playerProjPrefab, new ProjectileActiveTag());
@@ -93,7 +107,12 @@ namespace GameHolder.PureDots
             RenderMeshUtility.AddComponents(enemyProjPrefab, em, renderDesc, projRMA, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
             em.AddComponentData(enemyProjPrefab, Unity.Transforms.LocalTransform.FromPosition(new Unity.Mathematics.float3(0, 0, 100)));
             em.AddComponentData(enemyProjPrefab, new MovementVelocity());
-            em.AddComponentData(enemyProjPrefab, new ProjectileData { Damage = 15.0f, Radius = 0.25f, RemainingLifetime = 2.5f });
+            em.AddComponentData(enemyProjPrefab, new ProjectileData
+            {
+                Damage = SimulationConstants.EnemyProjectileDamage,
+                Radius = SimulationConstants.EnemyProjectileRadius,
+                RemainingLifetime = SimulationConstants.EnemyProjectileLifetime
+            });
             em.AddComponentData(enemyProjPrefab, new SpriteUVOffset { Value = new Unity.Mathematics.float4(1, 1, 0, 0) });
             em.AddComponentData(enemyProjPrefab, new EnemyProjectileTag());
             em.AddComponentData(enemyProjPrefab, new ProjectileActiveTag());

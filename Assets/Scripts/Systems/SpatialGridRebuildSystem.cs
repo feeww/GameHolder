@@ -13,10 +13,10 @@ namespace GameHolder.PureDots
     [UpdateAfter(typeof(MovementAndCameraRelativeZSystem))]
     public partial struct SpatialGridRebuildSystem : ISystem
     {
-        public const float CellSize = 1.25f; // Satisfies CellSize >= R_target + R_querier
-        public const float InvCellSize = 1.0f / CellSize;
-        public const float Tier1Radius = 22.0f;
-        public const float Tier1RadiusSq = Tier1Radius * Tier1Radius;
+        public const float CellSize = SimulationConstants.SpatialCellSize; // Satisfies CellSize >= R_target + R_querier
+        public const float InvCellSize = SimulationConstants.SpatialInvCellSize;
+        public const float Tier1Radius = SimulationConstants.Tier1Radius;
+        public const float Tier1RadiusSq = SimulationConstants.Tier1RadiusSq;
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -98,8 +98,8 @@ namespace GameHolder.PureDots
             // Only Tier 1 entities register into the spatial grid
             if (math.distancesq(pos, PlayerPos) > Tier1RadiusSq) return;
 
-            int2 cell = (int2)math.floor(pos * InvCellSize);
-            uint hash = unchecked(((uint)cell.x * 73856093u) ^ ((uint)cell.y * 19349663u));
+            int2 cell = SpatialHashUtils.QuantizeToCell(pos, InvCellSize);
+            uint hash = SpatialHashUtils.ComputeHash(cell);
 
             GridEntry entry = new GridEntry
             {
@@ -123,8 +123,8 @@ namespace GameHolder.PureDots
         public void Execute(Entity entity, in LocalTransform transform)
         {
             float2 pos = transform.Position.xy;
-            int2 cell = (int2)math.floor(pos * InvCellSize);
-            uint hash = unchecked(((uint)cell.x * 73856093u) ^ ((uint)cell.y * 19349663u));
+            int2 cell = SpatialHashUtils.QuantizeToCell(pos, InvCellSize);
+            uint hash = SpatialHashUtils.ComputeHash(cell);
 
             GridEntry entry = new GridEntry
             {

@@ -35,11 +35,9 @@ namespace GameHolder.PureDots
                 break;
             }
 
-            const float tier1Radius = 22.0f;
-            const float tier1RadiusSq = tier1Radius * tier1Radius;
-            const float separationRadius = 0.8f;
-            const float cellSize = SpatialGridRebuildSystem.CellSize;
-            const float invCellSize = 1.0f / cellSize;
+            const float tier1RadiusSq = SimulationConstants.Tier1RadiusSq;
+            const float separationRadius = SimulationConstants.SeparationRadius;
+            const float invCellSize = SimulationConstants.SpatialInvCellSize;
 
             var job = new StochasticSeparationJob
             {
@@ -60,7 +58,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(EnemyActiveTag))]
     public partial struct StochasticSeparationJob : IJobEntity
     {
@@ -93,7 +91,7 @@ namespace GameHolder.PureDots
                 return;
             }
 
-            const int MaxSeparationNeighbors = 4;
+            const int MaxSeparationNeighbors = SimulationConstants.MaxSeparationNeighbors;
             float separationRadiusSq = SeparationRadius * SeparationRadius;
             float invSeparationRadius = 1.0f / SeparationRadius;
 
@@ -107,7 +105,7 @@ namespace GameHolder.PureDots
             {
                 for (int cx = minCell.x; cx <= maxCell.x && count < MaxSeparationNeighbors; ++cx)
                 {
-                    uint queryHash = unchecked(((uint)cx * 73856093u) ^ ((uint)cy * 19349663u));
+                    uint queryHash = SpatialHashUtils.ComputeHash(cx, cy);
                     int2 targetCell = new int2(cx, cy);
                     if (Grid.TryGetFirstValue(queryHash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
                     {

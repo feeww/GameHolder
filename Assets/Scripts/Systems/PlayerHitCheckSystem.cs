@@ -61,14 +61,13 @@ namespace GameHolder.PureDots
             var playerDamageQueue = SystemAPI.GetSingleton<PlayerDamageEventQueueSingleton>().PlayerDamageQueue;
             var projectileDeactivationQueue = SystemAPI.GetSingleton<ProjectileDeactivationQueueSingleton>().StagedDeactivations;
 
-            const float cellSize = SpatialGridRebuildSystem.CellSize;
-            const float invCellSize = 1.0f / cellSize;
-            const float playerRadius = 0.4f;
-            const float enemyRadius = 0.4f;
+            const float invCellSize = SimulationConstants.SpatialInvCellSize;
+            const float playerRadius = SimulationConstants.PlayerCollisionRadius;
+            const float enemyRadius = SimulationConstants.EnemyCollisionRadius;
             const float contactRadius = playerRadius + enemyRadius;
             const float contactRadiusSq = contactRadius * contactRadius;
 
-            int2 playerCell = (int2)math.floor(playerPos * invCellSize);
+            int2 playerCell = SpatialHashUtils.QuantizeToCell(playerPos, invCellSize);
 
             // 1. Check contact with enemy crowd units (9-cell neighborhood)
             bool meleeHit = false;
@@ -77,7 +76,7 @@ namespace GameHolder.PureDots
                 for (int dx = -1; dx <= 1 && !meleeHit; ++dx)
                 {
                     int2 targetCell = playerCell + new int2(dx, dy);
-                    uint hash = unchecked(((uint)targetCell.x * 73856093u) ^ ((uint)targetCell.y * 19349663u));
+                    uint hash = SpatialHashUtils.ComputeHash(targetCell);
 
                     if (enemyGrid.TryGetFirstValue(hash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
                     {
@@ -92,7 +91,7 @@ namespace GameHolder.PureDots
                                     float dist = math.sqrt(distSq);
                                     float2 hitDir = dist > 0.0001f ? (diff / dist) : new float2(0.0f, 1.0f);
 
-                                    float damage = 10.0f;
+                                    float damage = SimulationConstants.DefaultMeleeDamage;
                                     if (hasCatalog && m_TypeIdLookup.HasComponent(entry.Entity))
                                     {
                                         int typeIdx = (int)m_TypeIdLookup[entry.Entity].Value;
@@ -125,7 +124,7 @@ namespace GameHolder.PureDots
                 for (int dx = -1; dx <= 1; ++dx)
                 {
                     int2 targetCell = playerCell + new int2(dx, dy);
-                    uint hash = unchecked(((uint)targetCell.x * 73856093u) ^ ((uint)targetCell.y * 19349663u));
+                    uint hash = SpatialHashUtils.ComputeHash(targetCell);
 
                     if (enemyProjGrid.TryGetFirstValue(hash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
                     {
@@ -134,7 +133,7 @@ namespace GameHolder.PureDots
                             if (math.all(entry.CellCoord == targetCell))
                             {
                                 float2 diff = playerPos - entry.Position;
-                                float projRadius = 0.25f;
+                                float projRadius = SimulationConstants.EnemyProjectileRadius;
                                 if (m_ProjectileDataLookup.HasComponent(entry.Entity))
                                 {
                                     projRadius = m_ProjectileDataLookup[entry.Entity].Radius;
@@ -146,7 +145,7 @@ namespace GameHolder.PureDots
                                 {
                                     float dist = math.sqrt(distSq);
                                     float2 hitDir = dist > 0.0001f ? (diff / dist) : new float2(0.0f, 1.0f);
-                                    float damage = 15.0f;
+                                    float damage = SimulationConstants.EnemyProjectileDamage;
                                     if (m_ProjectileDataLookup.HasComponent(entry.Entity))
                                     {
                                         damage = m_ProjectileDataLookup[entry.Entity].Damage;

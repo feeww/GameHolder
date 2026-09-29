@@ -40,10 +40,10 @@ namespace GameHolder.PureDots
             }
 
             m_Camera.orthographic = true;
-            m_Camera.orthographicSize = 10.0f;
-            m_Camera.nearClipPlane = -50.0f;
-            m_Camera.farClipPlane = 50.0f;
-            m_Camera.transform.position = new Vector3(0, 0, -10);
+            m_Camera.orthographicSize = SimulationConstants.CameraOrthographicSize;
+            m_Camera.nearClipPlane = SimulationConstants.CameraNearClip;
+            m_Camera.farClipPlane = SimulationConstants.CameraFarClip;
+            m_Camera.transform.position = new Vector3(0, 0, SimulationConstants.CameraZPosition);
 
             // Ensure presentation controller exists
             if (FindAnyObjectByType<CameraPresentationController>() == null)
@@ -92,8 +92,8 @@ namespace GameHolder.PureDots
 
             m_FloorQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             m_FloorQuad.name = "InfiniteFloorQuad";
-            m_FloorQuad.transform.localScale = new Vector3(100.0f, 100.0f, 1.0f);
-            m_FloorQuad.transform.position = new Vector3(0, 0, 10.0f); // Behind all sprites
+            m_FloorQuad.transform.localScale = new Vector3(SimulationConstants.FloorQuadSize, SimulationConstants.FloorQuadSize, 1.0f);
+            m_FloorQuad.transform.position = new Vector3(0, 0, SimulationConstants.FloorZPosition); // Behind all sprites
 
             var collider = m_FloorQuad.GetComponent<Collider>();
             if (collider != null) Destroy(collider);
@@ -120,7 +120,7 @@ namespace GameHolder.PureDots
             if (m_FloorQuad != null && m_Camera != null)
             {
                 Vector3 camPos = m_Camera.transform.position;
-                m_FloorQuad.transform.position = new Vector3(camPos.x, camPos.y, 10.0f);
+                m_FloorQuad.transform.position = new Vector3(camPos.x, camPos.y, SimulationConstants.FloorZPosition);
             }
         }
     }

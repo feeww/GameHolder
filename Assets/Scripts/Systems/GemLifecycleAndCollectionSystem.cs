@@ -46,7 +46,7 @@ namespace GameHolder.PureDots
             var cameraBounds = SystemAPI.GetSingleton<SimulationCameraBounds>();
 
             float2 playerPos = float2.zero;
-            float magnetRadius = 3.0f;
+            float magnetRadius = SimulationConstants.PlayerDefaultMagnetRadius;
             bool hasPlayer = false;
 
             foreach (var (transform, stats) in SystemAPI.Query<RefRO<LocalTransform>, RefRO<PlayerStats>>().WithAll<PlayerTag>())
@@ -80,13 +80,11 @@ namespace GameHolder.PureDots
             // ---------------------------------------------------------------
             // 1. Drain GemSpawnRequests via 3-Tier Cascade
             // ---------------------------------------------------------------
-            const float offScreenDist = 35.0f;
-            const float offScreenDistSq = offScreenDist * offScreenDist;
+            const float offScreenDistSq = SimulationConstants.OffScreenGemRecycleDistanceSq;
 
             while (gemSpawnQueue.TryDequeue(out GemSpawnRequest request))
             {
-                float relativeY = math.clamp(request.Position.y - cameraBounds.CameraPosition.y, -cameraBounds.ViewportExtentY, cameraBounds.ViewportExtentY);
-                float gemZ = cameraBounds.ZMinOffset + (relativeY + cameraBounds.ViewportExtentY) * cameraBounds.DepthScale;
+                float gemZ = cameraBounds.CalculateDepth(request.Position.y);
 
                 // Tier 1: Free Pool Allocation in O(1)
                 if (gemPool.FreeGems.TryDequeue(out Entity freeGem))
@@ -242,14 +240,14 @@ namespace GameHolder.PureDots
                 foreach (var stats in SystemAPI.Query<RefRW<PlayerStats>>().WithAll<PlayerTag>())
                 {
                     stats.ValueRW.Experience += totalExpGained;
-                    uint reqExp = stats.ValueRO.Level * 50;
+                    uint reqExp = stats.ValueRO.Level * SimulationConstants.ExpPerLevelMultiplier;
                     while (stats.ValueRW.Experience >= reqExp)
                     {
                         stats.ValueRW.Experience -= reqExp;
                         stats.ValueRW.Level++;
-                        stats.ValueRW.MaxHealth += 10.0f;
-                        stats.ValueRW.CurrentHealth = math.min(stats.ValueRO.MaxHealth, stats.ValueRO.CurrentHealth + 20.0f);
-                        reqExp = stats.ValueRO.Level * 50;
+                        stats.ValueRW.MaxHealth += SimulationConstants.HealthBonusPerLevel;
+                        stats.ValueRW.CurrentHealth = math.min(stats.ValueRO.MaxHealth, stats.ValueRO.CurrentHealth + SimulationConstants.HealthHealPerLevel);
+                        reqExp = stats.ValueRO.Level * SimulationConstants.ExpPerLevelMultiplier;
                     }
                     break;
                 }

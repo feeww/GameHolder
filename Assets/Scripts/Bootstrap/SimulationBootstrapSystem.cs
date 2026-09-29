@@ -36,17 +36,17 @@ namespace GameHolder.PureDots
             em.AddComponentData(cameraBoundsEntity, new SimulationCameraBounds
             {
                 CameraPosition = float2.zero,
-                ViewportExtentY = 15.0f,
-                DepthScale = 0.25f,
-                ZMinOffset = -5.0f,
-                ZMaxOffset = 5.0f
+                ViewportExtentY = SimulationConstants.CameraViewportExtentY,
+                DepthScale = SimulationConstants.CameraDepthScale,
+                ZMinOffset = SimulationConstants.CameraZMinOffset,
+                ZMaxOffset = SimulationConstants.CameraZMaxOffset
             });
 
             // 2. Floating origin config singleton
             var originEntity = em.CreateEntity();
             em.AddComponentData(originEntity, new FloatingOriginConfig
             {
-                ThresholdSq = 4000000.0f // 2000m threshold
+                ThresholdSq = SimulationConstants.FloatingOriginThresholdSq
             });
 
             // 3. Wave spawner config singleton
@@ -99,8 +99,8 @@ namespace GameHolder.PureDots
             em.AddComponentData(catalogEntity, new EnemyConfigCatalogSingleton { Catalog = catalogRef });
 
             // 5. Spatial Hash Grids (2x over-provisioning for load factor <= 0.5)
-            const int maxEnemies = 10000;
-            const int maxProjectiles = 2000;
+            const int maxEnemies = EnemyPoolSingleton.Capacity;
+            const int maxProjectiles = PlayerProjectilePoolSingleton.Capacity;
 
             var enemyGridEntity = em.CreateEntity();
             em.AddComponentData(enemyGridEntity, new EnemySpatialGridSingleton
@@ -168,12 +168,8 @@ namespace GameHolder.PureDots
                     Tier = 0,
                     SlotIndex = (uint)i
                 });
-                em.SetComponentData(gem, LocalTransform.FromPosition(new float3(0, 0, 100)));
-                em.SetComponentData(gem, new SpriteUVOffset { Value = new float4(0.5f, 0.5f, 0, 0) });
-                em.SetComponentData(gem, new BaseColorOverride { Value = new float4(1, 1, 1, 1) });
 
                 em.SetComponentEnabled<GemActiveTag>(gem, false);
-                em.SetComponentEnabled<DisableRendering>(gem, true);
                 em.SetComponentEnabled<MaterialMeshInfo>(gem, false);
 
                 gemPoolSingleton.AllGems.Add(new GemSpatialRecord
@@ -205,9 +201,7 @@ namespace GameHolder.PureDots
             for (int i = 0; i < maxEnemies; i++)
             {
                 Entity enemy = preallocatedEnemies[i];
-                em.SetComponentData(enemy, LocalTransform.FromPosition(new float3(0, 0, 100)));
                 em.SetComponentEnabled<EnemyActiveTag>(enemy, false);
-                em.SetComponentEnabled<DisableRendering>(enemy, true);
                 em.SetComponentEnabled<MaterialMeshInfo>(enemy, false);
                 enemyPoolSingleton.InactiveEnemies.Enqueue(enemy);
             }
@@ -227,9 +221,7 @@ namespace GameHolder.PureDots
             for (int i = 0; i < maxProjectiles; i++)
             {
                 Entity proj = preallocatedPlayerProj[i];
-                em.SetComponentData(proj, LocalTransform.FromPosition(new float3(0, 0, 100)));
                 em.SetComponentEnabled<ProjectileActiveTag>(proj, false);
-                em.SetComponentEnabled<DisableRendering>(proj, true);
                 em.SetComponentEnabled<MaterialMeshInfo>(proj, false);
                 playerProjPoolSingleton.InactiveProjectiles.Enqueue(proj);
             }
@@ -248,9 +240,7 @@ namespace GameHolder.PureDots
             for (int i = 0; i < maxProjectiles; i++)
             {
                 Entity proj = preallocatedEnemyProj[i];
-                em.SetComponentData(proj, LocalTransform.FromPosition(new float3(0, 0, 100)));
                 em.SetComponentEnabled<ProjectileActiveTag>(proj, false);
-                em.SetComponentEnabled<DisableRendering>(proj, true);
                 em.SetComponentEnabled<MaterialMeshInfo>(proj, false);
                 enemyProjPoolSingleton.InactiveProjectiles.Enqueue(proj);
             }
@@ -259,26 +249,8 @@ namespace GameHolder.PureDots
             var enemyProjPoolEntity = em.CreateEntity();
             em.AddComponentData(enemyProjPoolEntity, enemyProjPoolSingleton);
 
-            // 11. Instantiate Player Entity
+            // 11. Instantiate Player Entity (Prefab already contains default transform, velocity, stats, and invulnerability)
             var player = em.Instantiate(prefabs.PlayerPrefab);
-            em.SetComponentData(player, LocalTransform.FromPosition(float3.zero));
-            em.SetComponentData(player, new MovementVelocity { Value = float2.zero });
-            em.SetComponentData(player, new PlayerInputData { MoveInput = float2.zero });
-            em.SetComponentData(player, new PlayerInvulnerability
-            {
-                Timer = 0.0f,
-                InvulnerabilityDuration = 0.5f // 0.5s i-frame duration
-            });
-            em.SetComponentData(player, new PlayerStats
-            {
-                MoveSpeed = 6.0f,
-                MagnetRadius = 4.0f,
-                CurrentHealth = 100.0f,
-                MaxHealth = 100.0f,
-                Experience = 0,
-                Level = 1,
-                IsDead = 0
-            });
             em.SetComponentEnabled<MaterialMeshInfo>(player, true);
         }
 

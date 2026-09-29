@@ -14,15 +14,24 @@ namespace GameHolder.PureDots
         public float DepthScale;
         public float ZMinOffset;
         public float ZMaxOffset;
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public float CalculateDepth(float posY)
+        {
+            float relativeY = math.clamp(posY - CameraPosition.y, -ViewportExtentY, ViewportExtentY);
+            return ZMinOffset + (relativeY + ViewportExtentY) * DepthScale;
+        }
     }
 
     public struct FloatingOriginConfig : IComponentData
     {
-        public float ThresholdSq; // e.g., 4,000,000f (2000m radius threshold)
+        public const float DefaultThreshold = SimulationConstants.FloatingOriginThreshold;
+        public float ThresholdSq; // 4,000,000f (2000m radius threshold)
     }
 
     public struct EnemyPoolSingleton : IComponentData
     {
+        public const int Capacity = SimulationConstants.MaxEnemies;
         public UnsafeQueue<Entity> InactiveEnemies;
     }
 
@@ -33,6 +42,12 @@ namespace GameHolder.PureDots
         public float Damage;        // 4 bytes
         public uint HitFlags;       // 4 bytes
         public float2 Padding;      // 8 bytes (Total: exactly 32 bytes)
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public static ulong CreateTargetKey(Entity target)
+        {
+            return (((ulong)(uint)target.Index) << 32) | (ulong)(uint)target.Version;
+        }
     }
 
     [BurstCompile]

@@ -183,14 +183,14 @@ namespace GameHolder.PureDots
 
                 GUILayout.Space(6);
                 GUILayout.Label("--- SIMULATION METRICS ---", m_HeaderStyle);
-                GUILayout.Label($"• Active Swarm Enemies: <b>{m_ActiveEnemiesCount}</b> / 10,000", m_LabelStyle);
-                GUILayout.Label($"• Active Projectiles: <b>{m_ActiveProjectilesCount}</b> / 2,000", m_LabelStyle);
-                GUILayout.Label($"• Active Gems in Field: <b>{m_ActiveGemsCount}</b> / 1,024 (L1 Cache)", m_LabelStyle);
+                GUILayout.Label($"• Active Swarm Enemies: <b>{m_ActiveEnemiesCount}</b> / {EnemyPoolSingleton.Capacity:N0}", m_LabelStyle);
+                GUILayout.Label($"• Active Projectiles: <b>{m_ActiveProjectilesCount}</b> / {PlayerProjectilePoolSingleton.Capacity:N0}", m_LabelStyle);
+                GUILayout.Label($"• Active Gems in Field: <b>{m_ActiveGemsCount}</b> / {GemPoolSingleton.Capacity:N0} (L1 Cache)", m_LabelStyle);
                 GUILayout.Label($"• Total Gems Collected: <b>{m_TotalGemsCollected}</b> EXP", m_LabelStyle);
 
                 GUILayout.Space(6);
                 GUILayout.Label("--- PLAYER STATUS ---", m_HeaderStyle);
-                GUILayout.Label($"• Level: <b>{m_PlayerLevel}</b>  (EXP: {m_PlayerExperience} / {m_PlayerLevel * 50})", m_LabelStyle);
+                GUILayout.Label($"• Level: <b>{m_PlayerLevel}</b>  (EXP: {m_PlayerExperience} / {m_PlayerLevel * SimulationConstants.ExpPerLevelMultiplier})", m_LabelStyle);
                 float hpPercent = m_PlayerMaxHealth > 0 ? Mathf.Clamp01(m_PlayerHealth / m_PlayerMaxHealth) : 0;
                 string hpBar = $"HP: {m_PlayerHealth:F0}/{m_PlayerMaxHealth:F0} " + (m_PlayerInvulnTimer > 0 ? $"[i-FRAME {m_PlayerInvulnTimer:F2}s]" : "");
                 GUILayout.Label(hpBar, m_LabelStyle);
@@ -209,7 +209,7 @@ namespace GameHolder.PureDots
                 GUILayout.Label("--- FLOATING ORIGIN ---", m_HeaderStyle);
                 float distFromOrigin = m_PlayerCoords.magnitude;
                 GUILayout.Label($"• Local Coords: ({m_PlayerCoords.x:F1}, {m_PlayerCoords.y:F1})", m_LabelStyle);
-                GUILayout.Label($"• Distance to Rebase: {distFromOrigin:F0}m / 2,000m", m_LabelStyle);
+                GUILayout.Label($"• Distance to Rebase: {distFromOrigin:F0}m / {SimulationConstants.FloatingOriginThreshold:N0}m", m_LabelStyle);
                 GUILayout.Label($"• Total Rebases: <b>{m_RebaseCount}</b>", m_LabelStyle);
 
                 GUILayout.Space(8);
@@ -287,7 +287,7 @@ namespace GameHolder.PureDots
 
                     GUILayout.Label($"• Final Level: <b>{m_PlayerLevel}</b>", m_LabelStyle);
                     GUILayout.Label($"• Total Gems Collected: <b>{m_TotalGemsCollected}</b> EXP", m_LabelStyle);
-                    GUILayout.Label($"• Swarm Eliminations: <b>{10000 - m_ActiveEnemiesCount}</b>", m_LabelStyle);
+                    GUILayout.Label($"• Swarm Eliminations: <b>{EnemyPoolSingleton.Capacity - m_ActiveEnemiesCount}</b>", m_LabelStyle);
 
                     GUILayout.Space(16);
                     var respawnBtnStyle = new GUIStyle(m_ButtonStyle)
@@ -337,9 +337,9 @@ namespace GameHolder.PureDots
                 using var players = playerQuery.ToEntityArray(Allocator.Temp);
                 Entity p = players[0];
                 var transform = em.GetComponentData<Unity.Transforms.LocalTransform>(p);
-                // Set beyond 2000m threshold (lengthsq >= 4,000,000)
-                transform.Position.x = 2100.0f;
-                transform.Position.y = 2100.0f;
+                // Set beyond threshold to trigger rebase
+                transform.Position.x = SimulationConstants.FloatingOriginThreshold + 100.0f;
+                transform.Position.y = SimulationConstants.FloatingOriginThreshold + 100.0f;
                 em.SetComponentData(p, transform);
             }
         }
@@ -363,7 +363,7 @@ namespace GameHolder.PureDots
             for (int i = 0; i < enemies.Length; i++)
             {
                 Entity enemy = enemies[i];
-                ulong targetKey = (((ulong)(uint)enemy.Index) << 32) | (ulong)(uint)enemy.Version;
+                ulong targetKey = DamageEvent.CreateTargetKey(enemy);
                 damageSingleton.DamageQueue.Enqueue(new DamageEvent
                 {
                     TargetKey = targetKey,

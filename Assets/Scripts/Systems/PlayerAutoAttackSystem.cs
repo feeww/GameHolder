@@ -48,7 +48,7 @@ namespace GameHolder.PureDots
         {
             float dt = SystemAPI.Time.DeltaTime;
             m_AttackTimer += dt;
-            if (m_AttackTimer < 0.25f) return;
+            if (m_AttackTimer < SimulationConstants.AttackInterval) return;
             m_AttackTimer = 0.0f;
 
             float2 playerPos = float2.zero;
@@ -80,15 +80,14 @@ namespace GameHolder.PureDots
             m_MaterialMeshInfoLookup.Update(ref state);
             m_EnemyActiveLookup.Update(ref state);
 
-            // Find nearest active enemy within 18m search radius
-            const float cellSize = SpatialGridRebuildSystem.CellSize;
-            const float invCellSize = 1.0f / cellSize;
-            const float maxSearchRadius = 18.0f;
-            float minDistanceSq = maxSearchRadius * maxSearchRadius;
+            // Find nearest active enemy within search radius
+            const float invCellSize = SimulationConstants.SpatialInvCellSize;
+            const float maxSearchRadius = SimulationConstants.AttackSearchRadius;
+            float minDistanceSq = SimulationConstants.AttackSearchRadiusSq;
             float2 targetPos = float2.zero;
             bool hasTarget = false;
 
-            int2 playerCell = (int2)math.floor(playerPos * invCellSize);
+            int2 playerCell = SpatialHashUtils.QuantizeToCell(playerPos, invCellSize);
             int cellRadius = (int)math.ceil(maxSearchRadius * invCellSize);
 
             for (int dy = -cellRadius; dy <= cellRadius; ++dy)
@@ -96,7 +95,7 @@ namespace GameHolder.PureDots
                 for (int dx = -cellRadius; dx <= cellRadius; ++dx)
                 {
                     int2 targetCell = playerCell + new int2(dx, dy);
-                    uint hash = unchecked(((uint)targetCell.x * 73856093u) ^ ((uint)targetCell.y * 19349663u));
+                    uint hash = SpatialHashUtils.ComputeHash(targetCell);
 
                     if (enemyGrid.TryGetFirstValue(hash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
                     {
@@ -136,29 +135,28 @@ namespace GameHolder.PureDots
                 m_AngleCounter++;
             }
 
-            // Shoot a 3-way spread pattern (-0.2, 0.0, +0.2 rad)
-            for (int i = 0; i < 3; i++)
+            // Shoot spread pattern
+            for (int i = 0; i < SimulationConstants.ProjectileSpreadCount; i++)
             {
                 if (!pool.InactiveProjectiles.TryDequeue(out Entity proj))
                 {
                     break;
                 }
 
-                float angleOffset = (i - 1) * 0.2f;
+                float angleOffset = (i - 1) * SimulationConstants.ProjectileSpreadAngle;
                 float angle = baseAngle + angleOffset;
                 float2 dir = new float2(math.cos(angle), math.sin(angle));
-                float speed = 16.0f;
+                float speed = SimulationConstants.ProjectileSpeed;
 
-                float relativeY = math.clamp(playerPos.y - cameraBounds.CameraPosition.y, -cameraBounds.ViewportExtentY, cameraBounds.ViewportExtentY);
-                float projZ = cameraBounds.ZMinOffset + (relativeY + cameraBounds.ViewportExtentY) * cameraBounds.DepthScale;
+                float projZ = cameraBounds.CalculateDepth(playerPos.y);
 
                 m_LocalTransformLookup[proj] = LocalTransform.FromPosition(new float3(playerPos.x, playerPos.y, projZ));
                 m_VelocityLookup[proj] = new MovementVelocity { Value = dir * speed };
                 m_ProjectileDataLookup[proj] = new ProjectileData
                 {
-                    Damage = 25.0f,
-                    Radius = 0.35f,
-                    RemainingLifetime = 1.8f
+                    Damage = SimulationConstants.PlayerProjectileDamage,
+                    Radius = SimulationConstants.PlayerProjectileRadius,
+                    RemainingLifetime = SimulationConstants.PlayerProjectileLifetime
                 };
 
                 m_DisableRenderingLookup.SetComponentEnabled(proj, false);

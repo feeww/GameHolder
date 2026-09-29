@@ -151,12 +151,11 @@ namespace GameHolder.PureDots
 
                 // Archetype speed stratification:
                 // Type 0 = Tank ("Anvil"), Type 1 = Runner ("Hammer") if 2+ configs exist
-                uint requestedTypeId = (numConfigs > 1 && random.NextFloat() < 0.20f) ? 0u : (uint)math.min(1, numConfigs - 1);
+                uint requestedTypeId = (numConfigs > 1 && random.NextFloat() < 0.20f) ? SimulationConstants.EnemyTankTypeId : (uint)math.min(SimulationConstants.EnemyRunnerTypeId, (uint)(numConfigs - 1));
                 ref var config = ref catalog.Configs[(int)requestedTypeId];
 
                 // Initial camera-relative Z mapping
-                float relativeY = math.clamp(spawnPos.y - cameraBounds.CameraPosition.y, -cameraBounds.ViewportExtentY, cameraBounds.ViewportExtentY);
-                float initialZ = cameraBounds.ZMinOffset + (relativeY + cameraBounds.ViewportExtentY) * cameraBounds.DepthScale;
+                float initialZ = cameraBounds.CalculateDepth(spawnPos.y);
 
                 m_LocalTransformLookup[entity] = LocalTransform.FromPosition(new float3(spawnPos.x, spawnPos.y, initialZ));
                 m_CurrentHealthLookup[entity] = new CurrentHealth { Value = config.MaxHealth };

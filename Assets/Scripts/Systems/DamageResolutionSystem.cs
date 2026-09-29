@@ -210,7 +210,7 @@ namespace GameHolder.PureDots
                                 bridgeQueues.DeathEventQueue.Enqueue(new DeathEvent
                                 {
                                     Position = transform.ValueRO.Position.xy,
-                                    TypeId = 999 // 999 = Player Death
+                                    TypeId = SimulationConstants.PlayerTypeId
                                 });
                             }
                         }
@@ -267,7 +267,7 @@ namespace GameHolder.PureDots
                 gemQueue.Enqueue(new GemSpawnRequest
                 {
                     Position = pos,
-                    ExperienceValue = 10
+                    ExperienceValue = SimulationConstants.DefaultEnemyExpDrop
                 });
 
                 // Write death event to presentation bridge queue

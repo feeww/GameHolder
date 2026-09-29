@@ -27,9 +27,8 @@ namespace GameHolder.PureDots
             var damageEventQueue = SystemAPI.GetSingleton<DamageEventQueueSingleton>().DamageQueue;
             var deactivationQueue = SystemAPI.GetSingleton<ProjectileDeactivationQueueSingleton>().StagedDeactivations;
 
-            const float cellSize = SpatialGridRebuildSystem.CellSize;
-            const float invCellSize = 1.0f / cellSize;
-            const float maxTargetRadius = 0.5f;
+            const float invCellSize = SimulationConstants.SpatialInvCellSize;
+            const float maxTargetRadius = SimulationConstants.MaxEnemyCollisionRadius;
 
             var job = new PlayerProjectileBroadphaseJob
             {
@@ -49,7 +48,7 @@ namespace GameHolder.PureDots
         }
     }
 
-    [BurstCompile]
+    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
     [WithAll(typeof(ProjectileActiveTag), typeof(PlayerProjectileTag))]
     public partial struct PlayerProjectileBroadphaseJob : IJobEntity
     {
@@ -77,7 +76,7 @@ namespace GameHolder.PureDots
             {
                 for (int cx = minCell.x; cx <= maxCell.x; ++cx)
                 {
-                    uint hash = unchecked(((uint)cx * 73856093u) ^ ((uint)cy * 19349663u));
+                    uint hash = SpatialHashUtils.ComputeHash(cx, cy);
                     int2 targetCell = new int2(cx, cy);
 
                     if (EnemyGrid.TryGetFirstValue(hash, out GridEntry entry, out NativeParallelMultiHashMapIterator<uint> it))
@@ -90,8 +89,7 @@ namespace GameHolder.PureDots
                                 float totalRadius = r + MaxTargetRadius;
                                 if (math.lengthsq(diff) <= (totalRadius * totalRadius))
                                 {
-                                    // Precalculated 64-bit target key: Index in upper 32 bits, Version in lower 32 bits
-                                    ulong targetKey = (((ulong)(uint)entry.Entity.Index) << 32) | (ulong)(uint)entry.Entity.Version;
+                                    ulong targetKey = DamageEvent.CreateTargetKey(entry.Entity);
 
                                     DamageQueue.Enqueue(new DamageEvent
                                     {
