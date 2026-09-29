@@ -13,6 +13,7 @@ namespace GameHolder.PureDots
     public partial struct PlayerHitCheckSystem : ISystem
     {
         private ComponentLookup<ProjectileData> m_ProjectileDataLookup;
+        private ComponentLookup<TypeId> m_TypeIdLookup;
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -21,8 +22,10 @@ namespace GameHolder.PureDots
             state.RequireForUpdate<EnemyProjectileGridSingleton>();
             state.RequireForUpdate<PlayerDamageEventQueueSingleton>();
             state.RequireForUpdate<ProjectileDeactivationQueueSingleton>();
+            state.RequireForUpdate<EnemyConfigCatalogSingleton>();
 
             m_ProjectileDataLookup = state.GetComponentLookup<ProjectileData>(true);
+            m_TypeIdLookup = state.GetComponentLookup<TypeId>(true);
         }
 
         [BurstCompile]
@@ -48,6 +51,10 @@ namespace GameHolder.PureDots
             state.CompleteDependency();
 
             m_ProjectileDataLookup.Update(ref state);
+            m_TypeIdLookup.Update(ref state);
+
+            var catalogRef = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
+            bool hasCatalog = catalogRef.IsCreated;
 
             var enemyGrid = SystemAPI.GetSingleton<EnemySpatialGridSingleton>().Grid;
             var enemyProjGrid = SystemAPI.GetSingleton<EnemyProjectileGridSingleton>().Grid;
@@ -64,9 +71,10 @@ namespace GameHolder.PureDots
             int2 playerCell = (int2)math.floor(playerPos * invCellSize);
 
             // 1. Check contact with enemy crowd units (9-cell neighborhood)
-            for (int dy = -1; dy <= 1; ++dy)
+            bool meleeHit = false;
+            for (int dy = -1; dy <= 1 && !meleeHit; ++dy)
             {
-                for (int dx = -1; dx <= 1; ++dx)
+                for (int dx = -1; dx <= 1 && !meleeHit; ++dx)
                 {
                     int2 targetCell = playerCell + new int2(dx, dy);
                     uint hash = unchecked(((uint)targetCell.x * 73856093u) ^ ((uint)targetCell.y * 19349663u));
@@ -84,13 +92,25 @@ namespace GameHolder.PureDots
                                     float dist = math.sqrt(distSq);
                                     float2 hitDir = dist > 0.0001f ? (diff / dist) : new float2(0.0f, 1.0f);
 
+                                    float damage = 10.0f;
+                                    if (hasCatalog && m_TypeIdLookup.HasComponent(entry.Entity))
+                                    {
+                                        int typeIdx = (int)m_TypeIdLookup[entry.Entity].Value;
+                                        ref var configs = ref catalogRef.Value.Configs;
+                                        if (typeIdx >= 0 && typeIdx < configs.Length)
+                                        {
+                                            damage = configs[typeIdx].BaseDamage;
+                                        }
+                                    }
+
                                     playerDamageQueue.Enqueue(new PlayerDamageEvent
                                     {
-                                        Damage = 10.0f, // Contact melee damage
+                                        Damage = damage,
                                         HitDirection = hitDir,
                                         SourceEntity = entry.Entity
                                     });
                                     // Single melee contact is sufficient per frame due to i-frames
+                                    meleeHit = true;
                                     break;
                                 }
                             }
