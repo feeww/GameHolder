@@ -66,6 +66,7 @@ ExportedObj/
 *.mdb
 *.opendb
 *.VC.db
+graphify-out/
 
 # Unity3D generated meta files
 *.pidb.meta

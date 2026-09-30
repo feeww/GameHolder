@@ -10,7 +10,7 @@ namespace GameHolder.PureDots
         // -------------------------------------------------------------------------
         // Object Pool Capacities (Single Source of Truth)
         // -------------------------------------------------------------------------
-        public const int MaxEnemies = 10000;
+        public const int MaxEnemies = 1;
         public const int MaxProjectiles = 2000;
         public const int MaxGems = 1024; // Matches GemPoolSingleton.Capacity (32KB L1 cache aligned)
 
@@ -42,8 +42,8 @@ namespace GameHolder.PureDots
         // -------------------------------------------------------------------------
         public const float PlayerDefaultMoveSpeed = 6.0f;
         public const float PlayerDefaultMagnetRadius = 4.0f;
-        public const float PlayerDefaultMaxHealth = 100.0f;
-        public const float PlayerDefaultInvulnDuration = 0.5f;
+        public const float PlayerDefaultMaxHealth = 100000000.0f;
+        public const float PlayerDefaultInvulnDuration = 0.0f;
         public const float PlayerRespawnGracePeriod = 1.5f;
         public const float PlayerCollisionRadius = 0.4f;
         public const float EnemyCollisionRadius = 0.4f;
