@@ -99,8 +99,11 @@ namespace GameHolder.PureDots
             ref LocalTransform transform,
             ref MovementVelocity velocity,
             ref SeparationCache separationCache,
+            ref EnemyMeleeCooldown meleeCooldown,
             in TypeId typeId)
         {
+            meleeCooldown.CooldownTimer = math.max(0.0f, meleeCooldown.CooldownTimer - Dt);
+
             float3 pos = transform.Position;
             float2 toPlayer = PlayerPos - pos.xy;
             float distSq = math.lengthsq(toPlayer);

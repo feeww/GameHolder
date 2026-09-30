@@ -10,7 +10,7 @@ namespace GameHolder.PureDots
         // -------------------------------------------------------------------------
         // Object Pool Capacities (Single Source of Truth)
         // -------------------------------------------------------------------------
-        public const int MaxEnemies = 1;
+        public const int MaxEnemies = 50000;
         public const int MaxProjectiles = 2000;
         public const int MaxGems = 1024; // Matches GemPoolSingleton.Capacity (32KB L1 cache aligned)
 
@@ -49,6 +49,7 @@ namespace GameHolder.PureDots
         public const float EnemyCollisionRadius = 0.4f;
         public const float MaxEnemyCollisionRadius = 0.5f;
         public const float DefaultMeleeDamage = 10.0f;
+        public const float EnemyMeleeAttackCooldown = 1.0f;
 
         // -------------------------------------------------------------------------
         // Combat & Auto-Attack Weapon Tuning

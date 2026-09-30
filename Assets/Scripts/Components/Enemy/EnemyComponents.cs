@@ -44,4 +44,9 @@ namespace GameHolder.PureDots
     {
         public float CooldownTimer;
     }
+
+    public struct EnemyMeleeCooldown : IComponentData
+    {
+        public float CooldownTimer;
+    }
 }

@@ -83,6 +83,7 @@ namespace GameHolder.PureDots
             em.AddComponentData(enemyPrefab, new SpriteUVOffset { Value = new Unity.Mathematics.float4(1, 1, 0, 0) });
             em.AddComponentData(enemyPrefab, new BaseColorOverride { Value = new Unity.Mathematics.float4(1, 1, 1, 1) });
             em.AddComponentData(enemyPrefab, new EnemyRangedCooldown { CooldownTimer = 0.0f });
+            em.AddComponentData(enemyPrefab, new EnemyMeleeCooldown { CooldownTimer = 0.0f });
             em.AddComponentData(enemyPrefab, new EnemyActiveTag());
             em.AddComponentData(enemyPrefab, new DisableRendering());
             em.AddComponent<Prefab>(enemyPrefab);

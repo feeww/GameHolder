@@ -23,6 +23,7 @@ namespace GameHolder.PureDots
         private ComponentLookup<EnemyActiveTag> m_EnemyActiveLookup;
         private ComponentLookup<MaterialMeshInfo> m_MaterialMeshInfoLookup;
         private ComponentLookup<EnemyRangedCooldown> m_EnemyRangedCooldownLookup;
+        private ComponentLookup<EnemyMeleeCooldown> m_EnemyMeleeCooldownLookup;
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -42,6 +43,7 @@ namespace GameHolder.PureDots
             m_EnemyActiveLookup = state.GetComponentLookup<EnemyActiveTag>(false);
             m_MaterialMeshInfoLookup = state.GetComponentLookup<MaterialMeshInfo>(false);
             m_EnemyRangedCooldownLookup = state.GetComponentLookup<EnemyRangedCooldown>(false);
+            m_EnemyMeleeCooldownLookup = state.GetComponentLookup<EnemyMeleeCooldown>(false);
         }
 
         [BurstCompile]
@@ -91,6 +93,7 @@ namespace GameHolder.PureDots
             m_EnemyActiveLookup.Update(ref state);
             m_MaterialMeshInfoLookup.Update(ref state);
             m_EnemyRangedCooldownLookup.Update(ref state);
+            m_EnemyMeleeCooldownLookup.Update(ref state);
 
             var random = new Unity.Mathematics.Random(math.max(1u, spawnerConfig.RandomSeed));
 
@@ -203,6 +206,7 @@ namespace GameHolder.PureDots
                     initialCooldown = random.NextFloat(0.5f, SimulationConstants.RangedSniperAttackInterval);
                 }
                 m_EnemyRangedCooldownLookup[entity] = new EnemyRangedCooldown { CooldownTimer = initialCooldown };
+                m_EnemyMeleeCooldownLookup[entity] = new EnemyMeleeCooldown { CooldownTimer = 0.0f };
 
                 m_DisableRenderingLookup.SetComponentEnabled(entity, false);
                 m_EnemyActiveLookup.SetComponentEnabled(entity, true);

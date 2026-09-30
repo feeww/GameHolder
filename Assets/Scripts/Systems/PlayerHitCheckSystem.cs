@@ -13,6 +13,7 @@ namespace GameHolder.PureDots
     public partial struct PlayerHitCheckSystem : ISystem
     {
         private ComponentLookup<TypeId> m_TypeIdLookup;
+        private ComponentLookup<EnemyMeleeCooldown> m_EnemyMeleeCooldownLookup;
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -24,6 +25,7 @@ namespace GameHolder.PureDots
             state.RequireForUpdate<EnemyConfigCatalogSingleton>();
 
             m_TypeIdLookup = state.GetComponentLookup<TypeId>(true);
+            m_EnemyMeleeCooldownLookup = state.GetComponentLookup<EnemyMeleeCooldown>(false);
         }
 
         [BurstCompile]
@@ -53,6 +55,7 @@ namespace GameHolder.PureDots
             state.CompleteDependency();
 
             m_TypeIdLookup.Update(ref state);
+            m_EnemyMeleeCooldownLookup.Update(ref state);
 
             var catalogRef = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
             bool hasCatalog = catalogRef.IsCreated;
@@ -90,6 +93,15 @@ namespace GameHolder.PureDots
                                     float distSq = math.lengthsq(diff);
                                     if (distSq <= contactRadiusSq)
                                     {
+                                        // Enforce 1-second melee attack cooldown per enemy
+                                        if (m_EnemyMeleeCooldownLookup.HasComponent(entry.Entity))
+                                        {
+                                            if (m_EnemyMeleeCooldownLookup[entry.Entity].CooldownTimer > 0.0f)
+                                            {
+                                                continue;
+                                            }
+                                        }
+
                                         float dist = math.sqrt(distSq);
                                         float2 hitDir = dist > 0.0001f ? (diff / dist) : new float2(0.0f, 1.0f);
 
@@ -110,6 +122,16 @@ namespace GameHolder.PureDots
                                             HitDirection = hitDir,
                                             SourceEntity = entry.Entity
                                         });
+
+                                        // Set 1-second cooldown on attacking enemy
+                                        if (m_EnemyMeleeCooldownLookup.HasComponent(entry.Entity))
+                                        {
+                                            m_EnemyMeleeCooldownLookup[entry.Entity] = new EnemyMeleeCooldown
+                                            {
+                                                CooldownTimer = SimulationConstants.EnemyMeleeAttackCooldown
+                                            };
+                                        }
+
                                         // Single melee contact is sufficient per frame due to i-frames
                                         meleeHit = true;
                                         break;
