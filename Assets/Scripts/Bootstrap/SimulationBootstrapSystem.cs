@@ -64,7 +64,7 @@ namespace GameHolder.PureDots
             // 4. Enemy Config Catalog BlobAsset
             var builder = new BlobBuilder(Allocator.Temp);
             ref var catalogRoot = ref builder.ConstructRoot<EnemyConfigCatalog>();
-            var configsArray = builder.Allocate(ref catalogRoot.Configs, 2);
+            var configsArray = builder.Allocate(ref catalogRoot.Configs, 4);
 
             // Type 0: Tank ("Anvil")
             configsArray[0] = new EnemyConfigData
@@ -90,6 +90,32 @@ namespace GameHolder.PureDots
                 InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
                 ExperienceValue = 10,
                 SpeedVariation = 0.2f
+            };
+
+            // Type 2: Ranged Skirmisher (Kiting ranged enemy: advances to 7.5m, retreats when < 4.5m)
+            configsArray[2] = new EnemyConfigData
+            {
+                MaxHealth = 35.0f,
+                MoveSpeed = 3.4f,
+                CollisionRadius = 0.4f,
+                VisualRadius = 0.45f,
+                BaseDamage = 12.0f,
+                InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
+                ExperienceValue = 15,
+                SpeedVariation = 0.15f
+            };
+
+            // Type 3: Ranged Sniper (Long-range sniper: advances to 13m, holds ground and does not retreat)
+            configsArray[3] = new EnemyConfigData
+            {
+                MaxHealth = 50.0f,
+                MoveSpeed = 1.8f,
+                CollisionRadius = 0.45f,
+                VisualRadius = 0.5f,
+                BaseDamage = 15.0f,
+                InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
+                ExperienceValue = 20,
+                SpeedVariation = 0.1f
             };
 
             var catalogRef = builder.CreateBlobAssetReference<EnemyConfigCatalog>(Allocator.Persistent);

@@ -39,4 +39,9 @@ namespace GameHolder.PureDots
     public struct DisableRendering : IComponentData, IEnableableComponent
     {
     }
+
+    public struct EnemyRangedCooldown : IComponentData
+    {
+        public float CooldownTimer;
+    }
 }

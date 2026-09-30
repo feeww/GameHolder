@@ -84,7 +84,7 @@ namespace GameHolder.PureDots
 
             while (gemSpawnQueue.TryDequeue(out GemSpawnRequest request))
             {
-                float gemZ = cameraBounds.CalculateDepth(request.Position.y);
+                float gemZ = cameraBounds.CalculateDepth(request.Position.y) + SimulationConstants.GemZOffset;
 
                 // Tier 1: Free Pool Allocation in O(1)
                 if (gemPool.FreeGems.TryDequeue(out Entity freeGem))

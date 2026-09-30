@@ -83,7 +83,30 @@ namespace GameHolder.PureDots
         // -------------------------------------------------------------------------
         public const uint EnemyTankTypeId = 0;
         public const uint EnemyRunnerTypeId = 1;
+        public const uint EnemyRangedSkirmisherTypeId = 2; // Type 1: Ranged skirmisher (retreats when player is close)
+        public const uint EnemyRangedSniperTypeId = 3;     // Type 2: Long-range sniper (does not retreat)
         public const uint PlayerTypeId = 999;
+
+        // -------------------------------------------------------------------------
+        // Ranged Enemy Combat Tuning
+        // -------------------------------------------------------------------------
+        public const float RangedSkirmisherAttackRange = 7.5f;
+        public const float RangedSkirmisherAttackRangeSq = RangedSkirmisherAttackRange * RangedSkirmisherAttackRange; // 56.25f
+        public const float RangedSkirmisherRetreatRange = 4.5f;
+        public const float RangedSkirmisherRetreatRangeSq = RangedSkirmisherRetreatRange * RangedSkirmisherRetreatRange; // 20.25f
+        public const float RangedSkirmisherAttackInterval = 1.8f;
+        public const float RangedSkirmisherProjectileSpeed = 8.5f;
+        public const float RangedSkirmisherProjectileDamage = 12.0f;
+        public const float RangedSkirmisherProjectileRadius = 0.22f;
+        public const float RangedSkirmisherProjectileLifetime = 2.0f;
+
+        public const float RangedSniperAttackRange = 13.0f;
+        public const float RangedSniperAttackRangeSq = RangedSniperAttackRange * RangedSniperAttackRange; // 169.0f
+        public const float RangedSniperAttackInterval = 2.5f;
+        public const float RangedSniperProjectileSpeed = 13.0f;
+        public const float RangedSniperProjectileDamage = 25.0f;
+        public const float RangedSniperProjectileRadius = 0.30f;
+        public const float RangedSniperProjectileLifetime = 2.5f;
 
         // -------------------------------------------------------------------------
         // Camera & 2D Depth Mapping Bounds
@@ -99,5 +122,9 @@ namespace GameHolder.PureDots
         public const float CameraDepthScale = 0.25f;
         public const float CameraZMinOffset = -5.0f;
         public const float CameraZMaxOffset = 5.0f;
+
+        // Depth sorting offsets: Gems on ground layer behind enemies, faster entities rendered above slower
+        public const float GemZOffset = 2.0f;
+        public const float SpeedDepthScale = 0.2f;
     }
 }

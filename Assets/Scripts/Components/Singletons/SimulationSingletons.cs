@@ -16,10 +16,10 @@ namespace GameHolder.PureDots
         public float ZMaxOffset;
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public float CalculateDepth(float posY)
+        public float CalculateDepth(float posY, float speed = 0.0f)
         {
             float relativeY = math.clamp(posY - CameraPosition.y, -ViewportExtentY, ViewportExtentY);
-            return ZMinOffset + (relativeY + ViewportExtentY) * DepthScale;
+            return ZMinOffset + (relativeY + ViewportExtentY) * DepthScale - (speed * SimulationConstants.SpeedDepthScale);
         }
     }
 

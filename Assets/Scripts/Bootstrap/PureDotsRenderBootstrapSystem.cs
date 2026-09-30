@@ -28,12 +28,16 @@ namespace GameHolder.PureDots
             var playerTex = PureDotsAssetFactory.GeneratePlayerTexture();
             var enemyTankTex = PureDotsAssetFactory.GenerateEnemyTexture(true);
             var enemyRunnerTex = PureDotsAssetFactory.GenerateEnemyTexture(false);
+            var enemySkirmisherTex = PureDotsAssetFactory.GenerateEnemyRangedSkirmisherTexture();
+            var enemySniperTex = PureDotsAssetFactory.GenerateEnemyRangedSniperTexture();
             var projTex = PureDotsAssetFactory.GenerateProjectileTexture();
             var gemAtlasTex = PureDotsAssetFactory.GenerateGemAtlasTexture();
 
             var playerMat = PureDotsAssetFactory.CreateSpriteMaterial(playerTex);
             var enemyTankMat = PureDotsAssetFactory.CreateSpriteMaterial(enemyTankTex);
             var enemyRunnerMat = PureDotsAssetFactory.CreateSpriteMaterial(enemyRunnerTex);
+            var enemySkirmisherMat = PureDotsAssetFactory.CreateSpriteMaterial(enemySkirmisherTex);
+            var enemySniperMat = PureDotsAssetFactory.CreateSpriteMaterial(enemySniperTex);
             var projMat = PureDotsAssetFactory.CreateSpriteMaterial(projTex);
             var gemMat = PureDotsAssetFactory.CreateSpriteMaterial(gemAtlasTex);
 
@@ -66,10 +70,10 @@ namespace GameHolder.PureDots
 
             em.AddComponent<Prefab>(playerPrefab);
 
-            // Enemy Prefab (Array contains [0]=Tank material, [1]=Runner material)
+            // Enemy Prefab (Array contains [0]=Tank, [1]=Runner, [2]=Skirmisher, [3]=Sniper)
             var enemyPrefab = em.CreateEntity();
             em.SetName(enemyPrefab, "EnemyPrefab");
-            var enemyRMA = new RenderMeshArray(new[] { enemyTankMat, enemyRunnerMat }, new[] { quadMesh });
+            var enemyRMA = new RenderMeshArray(new[] { enemyTankMat, enemyRunnerMat, enemySkirmisherMat, enemySniperMat }, new[] { quadMesh });
             RenderMeshUtility.AddComponents(enemyPrefab, em, renderDesc, enemyRMA, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
             em.AddComponentData(enemyPrefab, Unity.Transforms.LocalTransform.FromPosition(new Unity.Mathematics.float3(0, 0, 100)));
             em.AddComponentData(enemyPrefab, new MovementVelocity());
@@ -78,6 +82,7 @@ namespace GameHolder.PureDots
             em.AddComponentData(enemyPrefab, new TypeId { Value = 1 });
             em.AddComponentData(enemyPrefab, new SpriteUVOffset { Value = new Unity.Mathematics.float4(1, 1, 0, 0) });
             em.AddComponentData(enemyPrefab, new BaseColorOverride { Value = new Unity.Mathematics.float4(1, 1, 1, 1) });
+            em.AddComponentData(enemyPrefab, new EnemyRangedCooldown { CooldownTimer = 0.0f });
             em.AddComponentData(enemyPrefab, new EnemyActiveTag());
             em.AddComponentData(enemyPrefab, new DisableRendering());
             em.AddComponent<Prefab>(enemyPrefab);
@@ -96,6 +101,7 @@ namespace GameHolder.PureDots
                 RemainingLifetime = SimulationConstants.PlayerProjectileLifetime
             });
             em.AddComponentData(playerProjPrefab, new SpriteUVOffset { Value = new Unity.Mathematics.float4(1, 1, 0, 0) });
+            em.AddComponentData(playerProjPrefab, new BaseColorOverride { Value = new Unity.Mathematics.float4(0.2f, 0.9f, 1.0f, 1.0f) });
             em.AddComponentData(playerProjPrefab, new PlayerProjectileTag());
             em.AddComponentData(playerProjPrefab, new ProjectileActiveTag());
             em.AddComponentData(playerProjPrefab, new DisableRendering());
@@ -114,6 +120,7 @@ namespace GameHolder.PureDots
                 RemainingLifetime = SimulationConstants.EnemyProjectileLifetime
             });
             em.AddComponentData(enemyProjPrefab, new SpriteUVOffset { Value = new Unity.Mathematics.float4(1, 1, 0, 0) });
+            em.AddComponentData(enemyProjPrefab, new BaseColorOverride { Value = new Unity.Mathematics.float4(1, 1, 1, 1) });
             em.AddComponentData(enemyProjPrefab, new EnemyProjectileTag());
             em.AddComponentData(enemyProjPrefab, new ProjectileActiveTag());
             em.AddComponentData(enemyProjPrefab, new DisableRendering());

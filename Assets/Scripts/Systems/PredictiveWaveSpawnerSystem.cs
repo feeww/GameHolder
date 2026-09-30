@@ -22,6 +22,7 @@ namespace GameHolder.PureDots
         private ComponentLookup<DisableRendering> m_DisableRenderingLookup;
         private ComponentLookup<EnemyActiveTag> m_EnemyActiveLookup;
         private ComponentLookup<MaterialMeshInfo> m_MaterialMeshInfoLookup;
+        private ComponentLookup<EnemyRangedCooldown> m_EnemyRangedCooldownLookup;
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -40,6 +41,7 @@ namespace GameHolder.PureDots
             m_DisableRenderingLookup = state.GetComponentLookup<DisableRendering>(false);
             m_EnemyActiveLookup = state.GetComponentLookup<EnemyActiveTag>(false);
             m_MaterialMeshInfoLookup = state.GetComponentLookup<MaterialMeshInfo>(false);
+            m_EnemyRangedCooldownLookup = state.GetComponentLookup<EnemyRangedCooldown>(false);
         }
 
         [BurstCompile]
@@ -88,6 +90,7 @@ namespace GameHolder.PureDots
             m_DisableRenderingLookup.Update(ref state);
             m_EnemyActiveLookup.Update(ref state);
             m_MaterialMeshInfoLookup.Update(ref state);
+            m_EnemyRangedCooldownLookup.Update(ref state);
 
             var random = new Unity.Mathematics.Random(math.max(1u, spawnerConfig.RandomSeed));
 
@@ -150,12 +153,37 @@ namespace GameHolder.PureDots
                 }
 
                 // Archetype speed stratification:
-                // Type 0 = Tank ("Anvil"), Type 1 = Runner ("Hammer") if 2+ configs exist
-                uint requestedTypeId = (numConfigs > 1 && random.NextFloat() < 0.20f) ? SimulationConstants.EnemyTankTypeId : (uint)math.min(SimulationConstants.EnemyRunnerTypeId, (uint)(numConfigs - 1));
+                // Type 0 = Tank (20%), Type 1 = Runner (50%), Type 2 = Skirmisher (15%), Type 3 = Sniper (15%)
+                uint requestedTypeId;
+                if (numConfigs >= 4)
+                {
+                    float roll = random.NextFloat();
+                    if (roll < 0.20f)
+                    {
+                        requestedTypeId = SimulationConstants.EnemyTankTypeId;
+                    }
+                    else if (roll < 0.70f)
+                    {
+                        requestedTypeId = SimulationConstants.EnemyRunnerTypeId;
+                    }
+                    else if (roll < 0.85f)
+                    {
+                        requestedTypeId = SimulationConstants.EnemyRangedSkirmisherTypeId;
+                    }
+                    else
+                    {
+                        requestedTypeId = SimulationConstants.EnemyRangedSniperTypeId;
+                    }
+                }
+                else
+                {
+                    requestedTypeId = (numConfigs > 1 && random.NextFloat() < 0.20f) ? SimulationConstants.EnemyTankTypeId : (uint)math.min(SimulationConstants.EnemyRunnerTypeId, (uint)(numConfigs - 1));
+                }
+
                 ref var config = ref catalog.Configs[(int)requestedTypeId];
 
-                // Initial camera-relative Z mapping
-                float initialZ = cameraBounds.CalculateDepth(spawnPos.y);
+                // Initial camera-relative Z mapping with speed sorting: faster entities rendered above slower
+                float initialZ = cameraBounds.CalculateDepth(spawnPos.y, config.MoveSpeed);
 
                 m_LocalTransformLookup[entity] = LocalTransform.FromPosition(new float3(spawnPos.x, spawnPos.y, initialZ));
                 m_CurrentHealthLookup[entity] = new CurrentHealth { Value = config.MaxHealth };
@@ -164,6 +192,17 @@ namespace GameHolder.PureDots
                 m_BaseColorLookup[entity] = new BaseColorOverride { Value = new float4(1.0f, 1.0f, 1.0f, 1.0f) };
                 m_MovementVelocityLookup[entity] = default;
                 m_SeparationCacheLookup[entity] = default;
+
+                float initialCooldown = 0.0f;
+                if (requestedTypeId == SimulationConstants.EnemyRangedSkirmisherTypeId)
+                {
+                    initialCooldown = random.NextFloat(0.3f, SimulationConstants.RangedSkirmisherAttackInterval);
+                }
+                else if (requestedTypeId == SimulationConstants.EnemyRangedSniperTypeId)
+                {
+                    initialCooldown = random.NextFloat(0.5f, SimulationConstants.RangedSniperAttackInterval);
+                }
+                m_EnemyRangedCooldownLookup[entity] = new EnemyRangedCooldown { CooldownTimer = initialCooldown };
 
                 m_DisableRenderingLookup.SetComponentEnabled(entity, false);
                 m_EnemyActiveLookup.SetComponentEnabled(entity, true);

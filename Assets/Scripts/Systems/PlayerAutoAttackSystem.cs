@@ -157,7 +157,7 @@ namespace GameHolder.PureDots
                 float2 dir = new float2(math.cos(angle), math.sin(angle));
                 float speed = SimulationConstants.ProjectileSpeed;
 
-                float projZ = cameraBounds.CalculateDepth(playerPos.y);
+                float projZ = cameraBounds.CalculateDepth(playerPos.y, speed);
 
                 m_LocalTransformLookup[proj] = LocalTransform.FromPosition(new float3(playerPos.x, playerPos.y, projZ));
                 m_VelocityLookup[proj] = new MovementVelocity { Value = dir * speed };

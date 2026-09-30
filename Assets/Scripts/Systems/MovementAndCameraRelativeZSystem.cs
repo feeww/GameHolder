@@ -129,25 +129,78 @@ namespace GameHolder.PureDots
             else
             {
                 // Tier 1 (On-screen + buffer):
-                // Apply blended separation vector
-                float2 blendedDir;
-                if (separationCache.Weight > 0.001f && math.lengthsq(separationCache.Direction) > 0.001f)
+                float2 desiredDir;
+                float moveSpeed = baseSpeed;
+
+                if (typeId.Value == SimulationConstants.EnemyRangedSkirmisherTypeId)
                 {
-                    blendedDir = math.normalizesafe(math.lerp(dirToPlayer, separationCache.Direction, separationCache.Weight * 0.7f));
+                    // Type 1: Ranged Skirmisher (moves toward player until within attack range; if player gets too close, retreats to maintain attack range)
+                    if (dist > SimulationConstants.RangedSkirmisherAttackRange)
+                    {
+                        desiredDir = dirToPlayer;
+                    }
+                    else if (dist < SimulationConstants.RangedSkirmisherRetreatRange)
+                    {
+                        desiredDir = -dirToPlayer; // Retreat away from player
+                    }
+                    else
+                    {
+                        desiredDir = float2.zero; // Maintain attack range
+                        moveSpeed = 0.0f;
+                    }
+                }
+                else if (typeId.Value == SimulationConstants.EnemyRangedSniperTypeId)
+                {
+                    // Type 2: Long-range Sniper (longer attack range than type 1, does NOT retreat when player approaches)
+                    if (dist > SimulationConstants.RangedSniperAttackRange)
+                    {
+                        desiredDir = dirToPlayer;
+                    }
+                    else
+                    {
+                        desiredDir = float2.zero; // Holds ground within attack range, does not retreat
+                        moveSpeed = 0.0f;
+                    }
                 }
                 else
                 {
-                    blendedDir = dirToPlayer;
+                    // Melee crowd units (Tank, Runner)
+                    desiredDir = dirToPlayer;
                 }
 
-                velocity.Value = blendedDir * baseSpeed;
+                // Apply separation blending
+                if (moveSpeed > 0.0f)
+                {
+                    if (separationCache.Weight > 0.001f && math.lengthsq(separationCache.Direction) > 0.001f)
+                    {
+                        float2 blendedDir = math.normalizesafe(math.lerp(desiredDir, separationCache.Direction, separationCache.Weight * 0.7f));
+                        velocity.Value = blendedDir * moveSpeed;
+                    }
+                    else
+                    {
+                        velocity.Value = desiredDir * moveSpeed;
+                    }
+                }
+                else
+                {
+                    // While holding ground, allow gentle separation drift to prevent perfect stacking
+                    if (separationCache.Weight > 0.001f && math.lengthsq(separationCache.Direction) > 0.001f)
+                    {
+                        velocity.Value = separationCache.Direction * (baseSpeed * separationCache.Weight * 0.35f);
+                    }
+                    else
+                    {
+                        velocity.Value = float2.zero;
+                    }
+                }
             }
 
             // Integrate position
             pos.xy += velocity.Value * Dt;
 
-            // Camera-relative Z depth calculation
-            pos.z = CameraBounds.CalculateDepth(pos.y);
+            // Camera-relative Z depth calculation: faster enemies rendered above slower ones
+            float entitySpeed = math.max(baseSpeed, math.length(velocity.Value));
+            pos.z = CameraBounds.CalculateDepth(pos.y, entitySpeed);
 
             transform.Position = pos;
         }
@@ -170,8 +223,9 @@ namespace GameHolder.PureDots
             float3 pos = transform.Position;
             pos.xy += velocity.Value * Dt;
 
-            // Camera-relative Z depth calculation
-            pos.z = CameraBounds.CalculateDepth(pos.y);
+            // Camera-relative Z depth calculation: faster projectiles rendered above slower ones
+            float speed = math.length(velocity.Value);
+            pos.z = CameraBounds.CalculateDepth(pos.y, speed);
             transform.Position = pos;
 
             // Decrement remaining lifetime
@@ -192,7 +246,7 @@ namespace GameHolder.PureDots
         public void Execute(ref LocalTransform transform)
         {
             float3 pos = transform.Position;
-            pos.z = CameraBounds.CalculateDepth(pos.y);
+            pos.z = CameraBounds.CalculateDepth(pos.y, SimulationConstants.PlayerDefaultMoveSpeed);
             transform.Position = pos;
         }
     }
