@@ -385,6 +385,7 @@ namespace GameHolder.PureDots
 
             var mat = new Material(shader)
             {
+                enableInstancing = true,
                 mainTexture = mainTexture
             };
             mat.SetTexture("_MainTex", mainTexture);

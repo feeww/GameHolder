@@ -4,6 +4,7 @@ namespace GameHolder.PureDots
 {
     public class GamePresentationBootstrap : MonoBehaviour
     {
+        public static GamePresentationBootstrap Instance { get; private set; }
         [Header("Rendering & Camera")]
         [SerializeField] private Camera m_Camera;
         [SerializeField] private Material m_FloorMaterial;
@@ -18,12 +19,21 @@ namespace GameHolder.PureDots
         public static AudioClip PlayerHitClip { get; private set; }
 
         private GameObject m_FloorQuad;
+        private bool m_OwnEnemyClip, m_OwnGemClip, m_OwnHitClip, m_OwnFloorMaterial;
+        private CameraPresentationController m_OwnCameraController;
+        private GameObject m_OwnCamera;
+        private MeshRenderer m_FloorRenderer;
+        private Unity.Mathematics.float2 m_FloorPhase;
+        private float m_TileScale = 2;
+        private static readonly int OriginTileOffset = Shader.PropertyToID("_OriginTileOffset");
 
         private void Awake()
         {
-            if (m_EnemyDeathClip == null) m_EnemyDeathClip = PureDotsAudioGenerator.CreateEnemyDeathClip();
-            if (m_GemCollectClip == null) m_GemCollectClip = PureDotsAudioGenerator.CreateGemCollectClip();
-            if (m_PlayerHitClip == null) m_PlayerHitClip = PureDotsAudioGenerator.CreatePlayerHitClip();
+            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            Instance = this;
+            if (m_EnemyDeathClip == null) { m_EnemyDeathClip = PureDotsAudioGenerator.CreateEnemyDeathClip(); m_OwnEnemyClip = true; }
+            if (m_GemCollectClip == null) { m_GemCollectClip = PureDotsAudioGenerator.CreateGemCollectClip(); m_OwnGemClip = true; }
+            if (m_PlayerHitClip == null) { m_PlayerHitClip = PureDotsAudioGenerator.CreatePlayerHitClip(); m_OwnHitClip = true; }
 
             EnemyDeathClip = m_EnemyDeathClip;
             GemCollectClip = m_GemCollectClip;
@@ -34,6 +44,7 @@ namespace GameHolder.PureDots
                 if (m_Camera == null)
                 {
                     var camGo = new GameObject("Main Camera");
+                    m_OwnCamera = camGo;
                     m_Camera = camGo.AddComponent<Camera>();
                     camGo.tag = "MainCamera";
                 }
@@ -48,13 +59,14 @@ namespace GameHolder.PureDots
             // Ensure presentation controller exists
             if (FindAnyObjectByType<CameraPresentationController>() == null)
             {
-                var camCtrl = m_Camera.gameObject.AddComponent<CameraPresentationController>();
+                m_OwnCameraController = m_Camera.gameObject.AddComponent<CameraPresentationController>();
             }
 
             // Ensure audio throttling manager exists
             if (FindAnyObjectByType<AudioThrottlingManager>() == null)
             {
                 var audioGo = new GameObject("AudioThrottlingManager");
+                audioGo.transform.SetParent(transform);
                 audioGo.AddComponent<AudioThrottlingManager>();
             }
 
@@ -62,6 +74,7 @@ namespace GameHolder.PureDots
             if (FindAnyObjectByType<BatchedParticleManager>() == null)
             {
                 var vfxGo = new GameObject("BatchedParticleManager");
+                vfxGo.transform.SetParent(transform);
                 var particleMgr = vfxGo.AddComponent<BatchedParticleManager>();
             }
 
@@ -69,6 +82,7 @@ namespace GameHolder.PureDots
             if (FindAnyObjectByType<PureDotsHUD>() == null)
             {
                 var hudGo = new GameObject("PureDotsHUD");
+                hudGo.transform.SetParent(transform);
                 hudGo.AddComponent<PureDotsHUD>();
             }
 
@@ -92,6 +106,7 @@ namespace GameHolder.PureDots
 
             m_FloorQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             m_FloorQuad.name = "InfiniteFloorQuad";
+            m_FloorQuad.transform.SetParent(transform);
             m_FloorQuad.transform.localScale = new Vector3(SimulationConstants.FloorQuadSize, SimulationConstants.FloorQuadSize, 1.0f);
             m_FloorQuad.transform.position = new Vector3(0, 0, SimulationConstants.FloorZPosition); // Behind all sprites
 
@@ -104,16 +119,48 @@ namespace GameHolder.PureDots
                 if (shader != null)
                 {
                     m_FloorMaterial = new Material(shader);
+                    m_OwnFloorMaterial = true;
                 }
             }
 
             if (m_FloorMaterial != null)
             {
+                if (!m_OwnFloorMaterial)
+                { m_FloorMaterial = new Material(m_FloorMaterial); m_OwnFloorMaterial = true; }
                 var renderer = m_FloorQuad.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial = m_FloorMaterial;
+                m_FloorRenderer = renderer;
+                m_TileScale = m_FloorMaterial.GetFloat("_TileScale");
             }
         }
 
+        public void ApplyFloorRebase(Unity.Mathematics.float2 delta)
+        {
+            m_FloorPhase = PresentationDepth.RebaseFloorPhase(m_FloorPhase, delta, m_TileScale);
+            UpdateFloorPhase();
+        }
+        public void ResetFloorPhase() { m_FloorPhase = Unity.Mathematics.float2.zero; UpdateFloorPhase(); }
+        private void UpdateFloorPhase()
+        {
+            if (m_FloorRenderer == null) return;
+            m_FloorMaterial.SetVector(OriginTileOffset, new Vector4(m_FloorPhase.x, m_FloorPhase.y, 0, 0));
+        }
+        private void OnDestroy()
+        {
+            if (Instance != this) return;
+            Instance = null; EnemyDeathClip = null; GemCollectClip = null; PlayerHitClip = null;
+            if (m_OwnEnemyClip) DestroyOwned(m_EnemyDeathClip);
+            if (m_OwnGemClip) DestroyOwned(m_GemCollectClip);
+            if (m_OwnHitClip) DestroyOwned(m_PlayerHitClip);
+            if (m_OwnFloorMaterial) DestroyOwned(m_FloorMaterial);
+            if (m_OwnCameraController != null) DestroyOwned(m_OwnCameraController);
+            if (m_OwnCamera != null) DestroyOwned(m_OwnCamera);
+        }
+        public static void DestroyOwned(Object asset)
+        {
+            if (asset == null) return;
+            if (Application.isPlaying) Destroy(asset); else DestroyImmediate(asset);
+        }
         private void LateUpdate()
         {
             // Floor quad tracks camera viewport xy position directly

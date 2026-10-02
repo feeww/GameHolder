@@ -10,7 +10,7 @@ namespace GameHolder.PureDots
         // -------------------------------------------------------------------------
         // Object Pool Capacities (Single Source of Truth)
         // -------------------------------------------------------------------------
-        public const int MaxEnemies = 50000;
+        public const int MaxEnemies = 3000;
         public const int MaxProjectiles = 2000;
         public const int MaxGems = 1024; // Matches GemPoolSingleton.Capacity (32KB L1 cache aligned)
 
@@ -36,13 +36,26 @@ namespace GameHolder.PureDots
 
         public const float SeparationRadius = 0.8f;
         public const int MaxSeparationNeighbors = 4;
+        public const int MaxCrowdEntries = 32;
+        public const float CrowdPushSpeed = 2.5f;
+        public const float CrowdSteeringMargin = 0.25f;
+        public const float CrowdBodyRadiusScale = 0.85f;
+        public const float CrowdTargetDensity = 1.0f;
+        public const float CrowdContactResponse = 8.0f;
+        public const float CrowdPackingRange = 3.0f;
+        public const float CrowdContactDeadZone = 0.01f;
+        public const float PlayerCrowdResistance = 0.2f;
+        public const float PlayerCrowdMinimumSpeed = 0.08f;
+        public const float PlayerCrowdPushSpeed = 2.0f;
+        public const float PlayerContactSkin = 0.01f;
+        public const float MeleeContactReach = 0.08f;
 
         // -------------------------------------------------------------------------
         // Player Baseline Stats & Collision
         // -------------------------------------------------------------------------
         public const float PlayerDefaultMoveSpeed = 6.0f;
         public const float PlayerDefaultMagnetRadius = 4.0f;
-        public const float PlayerDefaultMaxHealth = 100000000.0f;
+        public const float PlayerDefaultMaxHealth = 1000.0f;
         public const float PlayerDefaultInvulnDuration = 0.0f;
         public const float PlayerRespawnGracePeriod = 1.5f;
         public const float PlayerCollisionRadius = 0.4f;

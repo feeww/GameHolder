@@ -3,7 +3,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Mathematics;
-using Unity.Rendering;
+
 using Unity.Transforms;
 
 namespace GameHolder.PureDots
@@ -30,17 +30,6 @@ namespace GameHolder.PureDots
 
             var prefabs = SystemAPI.GetSingleton<PureDotsPrefabsSingleton>();
             var em = state.EntityManager;
-
-            // 1. Viewport & Camera bounds singleton
-            var cameraBoundsEntity = em.CreateEntity();
-            em.AddComponentData(cameraBoundsEntity, new SimulationCameraBounds
-            {
-                CameraPosition = float2.zero,
-                ViewportExtentY = SimulationConstants.CameraViewportExtentY,
-                DepthScale = SimulationConstants.CameraDepthScale,
-                ZMinOffset = SimulationConstants.CameraZMinOffset,
-                ZMaxOffset = SimulationConstants.CameraZMaxOffset
-            });
 
             // 2. Floating origin config singleton
             var originEntity = em.CreateEntity();
@@ -72,22 +61,22 @@ namespace GameHolder.PureDots
                 MaxHealth = 80.0f,
                 MoveSpeed = 2.4f,
                 CollisionRadius = 0.5f,
-                VisualRadius = 0.6f,
+                Mass = 4.0f,
+                AttackRange = 0.95f,
                 BaseDamage = 20.0f,
-                InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
                 ExperienceValue = 25,
                 SpeedVariation = 0.1f
             };
 
-            // Type 1: Runner ("Hammer") - 40% faster than player
+            // Type 1: Runner ("Hammer")
             configsArray[1] = new EnemyConfigData
             {
                 MaxHealth = 25.0f,
                 MoveSpeed = 5.2f,
                 CollisionRadius = 0.35f,
-                VisualRadius = 0.4f,
+                Mass = 1.0f,
+                AttackRange = 0.8f,
                 BaseDamage = 10.0f,
-                InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
                 ExperienceValue = 10,
                 SpeedVariation = 0.2f
             };
@@ -98,9 +87,9 @@ namespace GameHolder.PureDots
                 MaxHealth = 35.0f,
                 MoveSpeed = 3.4f,
                 CollisionRadius = 0.4f,
-                VisualRadius = 0.45f,
+                Mass = 1.5f,
+                AttackRange = SimulationConstants.RangedSkirmisherAttackRange,
                 BaseDamage = 12.0f,
-                InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
                 ExperienceValue = 15,
                 SpeedVariation = 0.15f
             };
@@ -111,9 +100,9 @@ namespace GameHolder.PureDots
                 MaxHealth = 50.0f,
                 MoveSpeed = 1.8f,
                 CollisionRadius = 0.45f,
-                VisualRadius = 0.5f,
+                Mass = 2.0f,
+                AttackRange = SimulationConstants.RangedSniperAttackRange,
                 BaseDamage = 15.0f,
-                InitialUV = new float4(1.0f, 1.0f, 0.0f, 0.0f),
                 ExperienceValue = 20,
                 SpeedVariation = 0.1f
             };
@@ -131,13 +120,8 @@ namespace GameHolder.PureDots
             var enemyGridEntity = em.CreateEntity();
             em.AddComponentData(enemyGridEntity, new EnemySpatialGridSingleton
             {
-                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxEnemies * 2, Allocator.Persistent)
-            });
-
-            var enemyProjGridEntity = em.CreateEntity();
-            em.AddComponentData(enemyProjGridEntity, new EnemyProjectileGridSingleton
-            {
-                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxProjectiles * 2, Allocator.Persistent)
+                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxEnemies * 2, Allocator.Persistent),
+                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(maxEnemies * 8, Allocator.Persistent)
             });
 
             // 6. Combat queues
@@ -196,7 +180,6 @@ namespace GameHolder.PureDots
                 });
 
                 em.SetComponentEnabled<GemActiveTag>(gem, false);
-                em.SetComponentEnabled<MaterialMeshInfo>(gem, false);
 
                 gemPoolSingleton.AllGems.Add(new GemSpatialRecord
                 {
@@ -218,7 +201,8 @@ namespace GameHolder.PureDots
             // 9. Enemy Pool Preallocation
             var enemyPoolSingleton = new EnemyPoolSingleton
             {
-                InactiveEnemies = new UnsafeQueue<Entity>(Allocator.Persistent)
+                InactiveEnemies = new UnsafeQueue<Entity>(Allocator.Persistent),
+                AllEnemies = new UnsafeList<Entity>(maxEnemies, Allocator.Persistent)
             };
 
             var preallocatedEnemies = CollectionHelper.CreateNativeArray<Entity>(maxEnemies, Allocator.Temp);
@@ -228,8 +212,9 @@ namespace GameHolder.PureDots
             {
                 Entity enemy = preallocatedEnemies[i];
                 em.SetComponentEnabled<EnemyActiveTag>(enemy, false);
-                em.SetComponentEnabled<MaterialMeshInfo>(enemy, false);
                 enemyPoolSingleton.InactiveEnemies.Enqueue(enemy);
+                enemyPoolSingleton.AllEnemies.Add(enemy);
+                em.SetComponentEnabled<EnemyRangedTag>(enemy, false);
             }
             preallocatedEnemies.Dispose();
 
@@ -239,7 +224,8 @@ namespace GameHolder.PureDots
             // 10. Projectile Pools Preallocation (Player & Enemy)
             var playerProjPoolSingleton = new PlayerProjectilePoolSingleton
             {
-                InactiveProjectiles = new UnsafeQueue<Entity>(Allocator.Persistent)
+                InactiveProjectiles = new UnsafeQueue<Entity>(Allocator.Persistent),
+                AllProjectiles = new UnsafeList<Entity>(maxProjectiles, Allocator.Persistent)
             };
 
             var preallocatedPlayerProj = CollectionHelper.CreateNativeArray<Entity>(maxProjectiles, Allocator.Temp);
@@ -248,8 +234,8 @@ namespace GameHolder.PureDots
             {
                 Entity proj = preallocatedPlayerProj[i];
                 em.SetComponentEnabled<ProjectileActiveTag>(proj, false);
-                em.SetComponentEnabled<MaterialMeshInfo>(proj, false);
                 playerProjPoolSingleton.InactiveProjectiles.Enqueue(proj);
+                playerProjPoolSingleton.AllProjectiles.Add(proj);
             }
             preallocatedPlayerProj.Dispose();
 
@@ -258,7 +244,8 @@ namespace GameHolder.PureDots
 
             var enemyProjPoolSingleton = new EnemyProjectilePoolSingleton
             {
-                InactiveProjectiles = new UnsafeQueue<Entity>(Allocator.Persistent)
+                InactiveProjectiles = new UnsafeQueue<Entity>(Allocator.Persistent),
+                AllProjectiles = new UnsafeList<Entity>(maxProjectiles, Allocator.Persistent)
             };
 
             var preallocatedEnemyProj = CollectionHelper.CreateNativeArray<Entity>(maxProjectiles, Allocator.Temp);
@@ -267,8 +254,8 @@ namespace GameHolder.PureDots
             {
                 Entity proj = preallocatedEnemyProj[i];
                 em.SetComponentEnabled<ProjectileActiveTag>(proj, false);
-                em.SetComponentEnabled<MaterialMeshInfo>(proj, false);
                 enemyProjPoolSingleton.InactiveProjectiles.Enqueue(proj);
+                enemyProjPoolSingleton.AllProjectiles.Add(proj);
             }
             preallocatedEnemyProj.Dispose();
 
@@ -277,12 +264,19 @@ namespace GameHolder.PureDots
 
             // 11. Instantiate Player Entity (Prefab already contains default transform, velocity, stats, and invulnerability)
             var player = em.Instantiate(prefabs.PlayerPrefab);
-            em.SetComponentEnabled<MaterialMeshInfo>(player, true);
+            var runEntity = em.CreateEntity();
+            em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1 });
+            em.AddComponentData(runEntity, new SimulationSnapshot { Player = RunDefaults.Player, AutoAttack = 1, Generation = 1 });
+            em.AddComponentData(runEntity, new SimulationJobFence());
+            em.AddComponentData(em.CreateEntity(), new SimulationInput());
+            em.AddComponentData(em.CreateEntity(), new SimulationCommandQueue { Commands = new UnsafeQueue<SimulationCommand>(Allocator.Persistent) });
         }
 
         [BurstCompile]
         public void OnDestroy(ref SystemState state)
         {
+            state.EntityManager.CompleteAllTrackedJobs();
+            if (SystemAPI.HasSingleton<SimulationCommandQueue>()) SystemAPI.GetSingleton<SimulationCommandQueue>().Commands.Dispose();
             if (SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>())
             {
                 var catalogSingleton = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>();
@@ -298,6 +292,7 @@ namespace GameHolder.PureDots
                 if (gridSingleton.Grid.IsCreated)
                 {
                     gridSingleton.Grid.Dispose();
+                    gridSingleton.CrowdCells.Dispose();
                 }
             }
 
@@ -316,6 +311,7 @@ namespace GameHolder.PureDots
                 if (pool.InactiveEnemies.IsCreated)
                 {
                     pool.InactiveEnemies.Dispose();
+                    pool.AllEnemies.Dispose();
                 }
             }
 
@@ -325,6 +321,7 @@ namespace GameHolder.PureDots
                 if (pool.InactiveProjectiles.IsCreated)
                 {
                     pool.InactiveProjectiles.Dispose();
+                    pool.AllProjectiles.Dispose();
                 }
             }
 
@@ -334,6 +331,7 @@ namespace GameHolder.PureDots
                 if (pool.InactiveProjectiles.IsCreated)
                 {
                     pool.InactiveProjectiles.Dispose();
+                    pool.AllProjectiles.Dispose();
                 }
             }
 

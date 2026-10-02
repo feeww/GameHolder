@@ -7,22 +7,6 @@ using Unity.Mathematics;
 
 namespace GameHolder.PureDots
 {
-    public struct SimulationCameraBounds : IComponentData
-    {
-        public float2 CameraPosition;
-        public float ViewportExtentY;
-        public float DepthScale;
-        public float ZMinOffset;
-        public float ZMaxOffset;
-
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        public float CalculateDepth(float posY, float speed = 0.0f)
-        {
-            float relativeY = math.clamp(posY - CameraPosition.y, -ViewportExtentY, ViewportExtentY);
-            return ZMinOffset + (relativeY + ViewportExtentY) * DepthScale - (speed * SimulationConstants.SpeedDepthScale);
-        }
-    }
-
     public struct FloatingOriginConfig : IComponentData
     {
         public const float DefaultThreshold = SimulationConstants.FloatingOriginThreshold;
@@ -33,6 +17,7 @@ namespace GameHolder.PureDots
     {
         public const int Capacity = SimulationConstants.MaxEnemies;
         public UnsafeQueue<Entity> InactiveEnemies;
+        public UnsafeList<Entity> AllEnemies;
     }
 
     public struct DamageEvent
@@ -55,7 +40,8 @@ namespace GameHolder.PureDots
     {
         public int Compare(DamageEvent x, DamageEvent y)
         {
-            return x.TargetKey < y.TargetKey ? -1 : (x.TargetKey > y.TargetKey ? 1 : 0);
+            int targetOrder = x.TargetKey < y.TargetKey ? -1 : (x.TargetKey > y.TargetKey ? 1 : 0);
+            return targetOrder != 0 ? targetOrder : x.Damage.CompareTo(y.Damage);
         }
     }
 
@@ -64,6 +50,7 @@ namespace GameHolder.PureDots
         public float Damage;
         public float2 HitDirection;
         public Entity SourceEntity;
+        public float HitTime;
     }
 
     public struct DamageEventQueueSingleton : IComponentData

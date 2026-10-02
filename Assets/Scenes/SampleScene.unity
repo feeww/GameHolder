@@ -388,7 +388,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6b0c25c1ff6df544cb787d95834fa3e7, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: GameHolder.PureDots::GameHolder.PureDots.GamePresentationBootstrap
+  m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.GamePresentationBootstrap
   m_Camera: {fileID: 0}
   m_FloorMaterial: {fileID: 0}
   m_EnemyDeathClip: {fileID: 0}

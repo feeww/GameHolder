@@ -4,6 +4,7 @@ Shader "PureDots/InfiniteFloor"
     {
         _MainTex ("Floor Texture", 2D) = "gray" {}
         _TileScale ("Tile World Scale", Float) = 2.0
+        _OriginTileOffset ("Origin Tile Offset", Vector) = (0,0,0,0)
         _FloorColor ("Floor Tint", Color) = (0.2, 0.22, 0.25, 1.0)
         _GridColor ("Grid Line Tint", Color) = (0.3, 0.33, 0.38, 1.0)
     }
@@ -35,6 +36,7 @@ Shader "PureDots/InfiniteFloor"
 
             CBUFFER_START(UnityPerMaterial)
                 float _TileScale;
+                float4 _OriginTileOffset;
                 float4 _FloorColor;
                 float4 _GridColor;
             CBUFFER_END
@@ -67,7 +69,7 @@ Shader "PureDots/InfiniteFloor"
             {
                 float scale = max(0.1, _TileScale);
                 // World coordinates modulo tile scale prevents precision jitter
-                float2 floorUV = frac(input.worldXY / scale);
+                float2 floorUV = frac((input.worldXY + _OriginTileOffset.xy) / scale);
 
                 half4 texColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, floorUV);
 

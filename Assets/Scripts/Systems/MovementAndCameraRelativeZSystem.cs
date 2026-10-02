@@ -2,255 +2,95 @@ using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
     [BurstCompile]
-    [UpdateInGroup(typeof(SimulationSystemGroup))]
-    [UpdateAfter(typeof(PredictiveWaveSpawnerSystem))]
-    public partial struct MovementAndCameraRelativeZSystem : ISystem
+    public struct MoveEnemiesJob : IJobParallelFor
     {
-        [BurstCompile]
-        public void OnCreate(ref SystemState state)
-        {
-            state.RequireForUpdate<SimulationCameraBounds>();
-            state.RequireForUpdate<EnemyConfigCatalogSingleton>();
-            state.RequireForUpdate<ProjectileDeactivationQueueSingleton>();
-        }
-
-        [BurstCompile]
-        public void OnUpdate(ref SystemState state)
-        {
-            float dt = SystemAPI.Time.DeltaTime;
-            if (dt <= 0.0f) return;
-
-            var cameraBounds = SystemAPI.GetSingleton<SimulationCameraBounds>();
-            var catalogRef = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
-            if (!catalogRef.IsCreated) return;
-
-            var deactivationSingleton = SystemAPI.GetSingleton<ProjectileDeactivationQueueSingleton>();
-            var deactivationQueueWriter = deactivationSingleton.StagedDeactivations.AsParallelWriter();
-
-            float2 playerPos = float2.zero;
-            foreach (var transform in SystemAPI.Query<RefRO<LocalTransform>>().WithAll<PlayerTag>())
-            {
-                playerPos = transform.ValueRO.Position.xy;
-                break;
-            }
-
-            // Constants for Tier 1 / Tier 2 LOD
-            const float tier1RadiusSq = SimulationConstants.Tier1RadiusSq;
-            const float tier2MaxRadiusSq = SimulationConstants.Tier2MaxRadiusSq;
-            const float invBufferRangeSq = 1.0f / (tier2MaxRadiusSq - tier1RadiusSq);
-            const float maxCatchUpMultiplier = SimulationConstants.MaxCatchUpMultiplier;
-
-            // 1. Update Enemies
-            var updateEnemiesJob = new UpdateEnemiesJob
-            {
-                Dt = dt,
-                PlayerPos = playerPos,
-                Catalog = catalogRef,
-                CameraBounds = cameraBounds,
-                Tier1RadiusSq = tier1RadiusSq,
-                InvBufferRangeSq = invBufferRangeSq,
-                MaxCatchUpMultiplier = maxCatchUpMultiplier
-            };
-            state.Dependency = updateEnemiesJob.ScheduleParallel(state.Dependency);
-
-            // 2. Update Projectiles
-            var updateProjectilesJob = new UpdateProjectilesJob
-            {
-                Dt = dt,
-                CameraBounds = cameraBounds,
-                DeactivationQueue = deactivationQueueWriter
-            };
-            state.Dependency = updateProjectilesJob.ScheduleParallel(state.Dependency);
-
-            // 3. Update Player Z
-            var updatePlayerZJob = new UpdatePlayerZJob
-            {
-                CameraBounds = cameraBounds
-            };
-            state.Dependency = updatePlayerZJob.Schedule(state.Dependency);
-        }
-
-        [BurstCompile]
-        public void OnDestroy(ref SystemState state)
-        {
-        }
-    }
-
-    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
-    [WithAll(typeof(EnemyActiveTag))]
-    public partial struct UpdateEnemiesJob : IJobEntity
-    {
+        [ReadOnly] public UnsafeList<Entity> Entities;
+        [ReadOnly] public ComponentLookup<EnemyActiveTag> Active;
+        [ReadOnly] public ComponentLookup<TypeId> Types;
+        [ReadOnly] public ComponentLookup<SimulationRunState> Run;
+        public Entity State;
+        public BlobAssetReference<EnemyConfigCatalog> Catalog;
         public float Dt;
-        public float2 PlayerPos;
-        [ReadOnly] public BlobAssetReference<EnemyConfigCatalog> Catalog;
-        public SimulationCameraBounds CameraBounds;
-        public float Tier1RadiusSq;
-        public float InvBufferRangeSq;
-        public float MaxCatchUpMultiplier;
-
-        public void Execute(
-            Entity entity,
-            ref LocalTransform transform,
-            ref MovementVelocity velocity,
-            ref SeparationCache separationCache,
-            ref EnemyMeleeCooldown meleeCooldown,
-            in TypeId typeId)
+        [NativeDisableParallelForRestriction] public ComponentLookup<LocalTransform> Transforms;
+        [NativeDisableParallelForRestriction] public ComponentLookup<PreviousPosition> Previous;
+        [NativeDisableParallelForRestriction] public ComponentLookup<MovementVelocity> Velocities;
+        [NativeDisableParallelForRestriction] public ComponentLookup<SeparationCache> Separation;
+        [NativeDisableParallelForRestriction] public ComponentLookup<EnemyMeleeCooldown> Cooldown;
+        public void Execute(int index)
         {
-            meleeCooldown.CooldownTimer = math.max(0.0f, meleeCooldown.CooldownTimer - Dt);
-
-            float3 pos = transform.Position;
-            float2 toPlayer = PlayerPos - pos.xy;
-            float distSq = math.lengthsq(toPlayer);
-
-            int configIdx = (int)typeId.Value;
-            ref var configs = ref Catalog.Value.Configs;
-            float baseSpeed = (configIdx >= 0 && configIdx < configs.Length) ? configs[configIdx].MoveSpeed : 3.0f;
-
-            float dist = math.sqrt(distSq);
-            float2 dirToPlayer = dist > 0.0001f ? (toPlayer / dist) : float2.zero;
-
-            if (distSq > Tier1RadiusSq)
+            Entity e = Entities[index];
+            if (!Active.IsComponentEnabled(e)) return;
+            var transform = Transforms[e];
+            Previous[e] = new PreviousPosition { Value = transform.Position.xy };
+            var cooldown = Cooldown[e]; cooldown.CooldownTimer = math.max(0, cooldown.CooldownTimer - Dt); Cooldown[e] = cooldown;
+            float2 toPlayer = Run[State].PlayerPosition - transform.Position.xy;
+            float distanceSq = math.lengthsq(toPlayer);
+            float distance = math.sqrt(distanceSq);
+            float2 direction = math.normalizesafe(toPlayer);
+            uint type = Types[e].Value;
+            var config = Catalog.Value.Configs[(int)type];
+            float baseSpeed = config.MoveSpeed;
+            var separation = Separation[e];
+            float speed = baseSpeed;
+            if (distanceSq > SimulationConstants.Tier1RadiusSq)
             {
-                // Tier 2 (Off-screen):
-                // Zero separation cache to prevent lateral drift during catch-up
-                separationCache.Direction = float2.zero;
-                separationCache.Weight = 0.0f;
-
-                // Off-screen catch-up boost:
-                // Smooth linear attenuation approaching Tier 1 boundary
-                float t = math.saturate((distSq - Tier1RadiusSq) * InvBufferRangeSq);
-                float speedMultiplier = math.lerp(1.0f, MaxCatchUpMultiplier, t);
-
-                velocity.Value = dirToPlayer * (baseSpeed * speedMultiplier);
+                separation = default;
+                float t = math.saturate((distanceSq - SimulationConstants.Tier1RadiusSq) /
+                    (SimulationConstants.Tier2MaxRadiusSq - SimulationConstants.Tier1RadiusSq));
+                speed *= math.lerp(1, SimulationConstants.MaxCatchUpMultiplier, t);
             }
             else
             {
-                // Tier 1 (On-screen + buffer):
-                float2 desiredDir;
-                float moveSpeed = baseSpeed;
-
-                if (typeId.Value == SimulationConstants.EnemyRangedSkirmisherTypeId)
+                if (type == SimulationConstants.EnemyRangedSkirmisherTypeId && distanceSq < SimulationConstants.RangedSkirmisherRetreatRangeSq)
                 {
-                    // Type 1: Ranged Skirmisher (moves toward player until within attack range; if player gets too close, retreats to maintain attack range)
-                    if (dist > SimulationConstants.RangedSkirmisherAttackRange)
-                    {
-                        desiredDir = dirToPlayer;
-                    }
-                    else if (dist < SimulationConstants.RangedSkirmisherRetreatRange)
-                    {
-                        desiredDir = -dirToPlayer; // Retreat away from player
-                    }
-                    else
-                    {
-                        desiredDir = float2.zero; // Maintain attack range
-                        moveSpeed = 0.0f;
-                    }
+                    direction = -direction;
+                    speed = math.min(speed, (SimulationConstants.RangedSkirmisherRetreatRange - distance) / math.max(Dt, 1e-6f));
                 }
-                else if (typeId.Value == SimulationConstants.EnemyRangedSniperTypeId)
-                {
-                    // Type 2: Long-range Sniper (longer attack range than type 1, does NOT retreat when player approaches)
-                    if (dist > SimulationConstants.RangedSniperAttackRange)
-                    {
-                        desiredDir = dirToPlayer;
-                    }
-                    else
-                    {
-                        desiredDir = float2.zero; // Holds ground within attack range, does not retreat
-                        moveSpeed = 0.0f;
-                    }
-                }
-                else
-                {
-                    // Melee crowd units (Tank, Runner)
-                    desiredDir = dirToPlayer;
-                }
-
-                // Apply separation blending
-                if (moveSpeed > 0.0f)
-                {
-                    if (separationCache.Weight > 0.001f && math.lengthsq(separationCache.Direction) > 0.001f)
-                    {
-                        float2 blendedDir = math.normalizesafe(math.lerp(desiredDir, separationCache.Direction, separationCache.Weight * 0.7f));
-                        velocity.Value = blendedDir * moveSpeed;
-                    }
-                    else
-                    {
-                        velocity.Value = desiredDir * moveSpeed;
-                    }
-                }
-                else
-                {
-                    // While holding ground, allow gentle separation drift to prevent perfect stacking
-                    if (separationCache.Weight > 0.001f && math.lengthsq(separationCache.Direction) > 0.001f)
-                    {
-                        velocity.Value = separationCache.Direction * (baseSpeed * separationCache.Weight * 0.35f);
-                    }
-                    else
-                    {
-                        velocity.Value = float2.zero;
-                    }
-                }
+                else speed = math.min(speed, math.max(0, distance - config.AttackRange) / math.max(Dt, 1e-6f));
+                speed *= math.min(1, SimulationConstants.CrowdTargetDensity / math.max(SimulationConstants.CrowdTargetDensity, separation.Density));
             }
-
-            // Integrate position
-            pos.xy += velocity.Value * Dt;
-
-            // Camera-relative Z depth calculation: faster enemies rendered above slower ones
-            float entitySpeed = math.max(baseSpeed, math.length(velocity.Value));
-            pos.z = CameraBounds.CalculateDepth(pos.y, entitySpeed);
-
-            transform.Position = pos;
+            // Blocked approaches split around the player instead of continually driving into the centre.
+            float2 tangent = new float2(-direction.y, direction.x);
+            float side = math.dot(separation.Direction, tangent);
+            if (math.abs(side) < .5f) side = (index & 1) == 0 ? 1 : -1;
+            float routing = math.smoothstep(0, SimulationConstants.CrowdPackingRange, math.max(0, distance - config.AttackRange));
+            routing *= SimulationConstants.CrowdTargetDensity / (SimulationConstants.CrowdTargetDensity + separation.Density);
+            float2 velocity = direction * speed + tangent * (side * baseSpeed * separation.Weight * .65f * routing);
+            float length = math.length(velocity);
+            velocity *= math.min(1, math.max(speed, baseSpeed) / math.max(length, 1e-6f));
+            transform.Position.xy += velocity * Dt; transform.Position.z = 0;
+            Transforms[e] = transform; Velocities[e] = new MovementVelocity { Value = velocity }; Separation[e] = separation;
         }
     }
-
-    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
-    [WithAll(typeof(ProjectileActiveTag))]
-    public partial struct UpdateProjectilesJob : IJobEntity
+    [BurstCompile]
+    public struct MoveProjectilesJob : IJob
     {
+        public SimulationAccess A;
         public float Dt;
-        public SimulationCameraBounds CameraBounds;
-        public UnsafeQueue<Entity>.ParallelWriter DeactivationQueue;
-
-        public void Execute(
-            Entity entity,
-            ref LocalTransform transform,
-            ref ProjectileData projectileData,
-            in MovementVelocity velocity)
+        public void Execute()
         {
-            float3 pos = transform.Position;
-            pos.xy += velocity.Value * Dt;
-
-            // Camera-relative Z depth calculation: faster projectiles rendered above slower ones
-            float speed = math.length(velocity.Value);
-            pos.z = CameraBounds.CalculateDepth(pos.y, speed);
-            transform.Position = pos;
-
-            // Decrement remaining lifetime
-            projectileData.RemainingLifetime -= Dt;
-            if (projectileData.RemainingLifetime <= 0.0f)
-            {
-                DeactivationQueue.Enqueue(entity);
-            }
+            Move(A.PlayerPool.AllProjectiles); Move(A.EnemyProjectilePool.AllProjectiles);
         }
-    }
-
-    [BurstCompile(FloatMode = FloatMode.Fast, FloatPrecision = FloatPrecision.Standard)]
-    [WithAll(typeof(PlayerTag))]
-    public partial struct UpdatePlayerZJob : IJobEntity
-    {
-        public SimulationCameraBounds CameraBounds;
-
-        public void Execute(ref LocalTransform transform)
+        private void Move(UnsafeList<Entity> entities)
         {
-            float3 pos = transform.Position;
-            pos.z = CameraBounds.CalculateDepth(pos.y, SimulationConstants.PlayerDefaultMoveSpeed);
-            transform.Position = pos;
+            for (int i = 0; i < entities.Length; i++)
+            {
+                Entity e = entities[i];
+                if (!A.Projectiles.IsComponentEnabled(e)) continue;
+                var transform = A.Transforms[e];
+                A.Previous[e] = new PreviousPosition { Value = transform.Position.xy };
+                transform.Position.xy += A.Velocities[e].Value * Dt; transform.Position.z = 0;
+                A.Transforms[e] = transform;
+                var projectile = A.ProjectileData[e]; projectile.RemainingLifetime -= Dt; A.ProjectileData[e] = projectile;
+                if (projectile.RemainingLifetime <= 0) A.Deactivations.Enqueue(e);
+            }
         }
     }
 }

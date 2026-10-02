@@ -24,6 +24,7 @@ namespace GameHolder.PureDots
             }
         }
 
+        private void OnDestroy() { if (Instance == this) Instance = null; }
         public void ApplyRebaseOffset(Vector2 rebaseDelta)
         {
             if (m_TargetCamera != null)

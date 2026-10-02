@@ -11,6 +11,8 @@ namespace GameHolder.PureDots
         [SerializeField] private ParticleSystem m_GemCollectParticleSystem;
 
         private ParticleSystem.Particle[] m_ParticlesBuffer;
+        private readonly Material[] m_OwnedMaterials = new Material[3];
+        private int m_MaterialCount, m_EmitCalls, m_EmittedParticles;
 
         private void Awake()
         {
@@ -43,6 +45,7 @@ namespace GameHolder.PureDots
             go.transform.SetParent(transform);
             var ps = go.AddComponent<ParticleSystem>();
             var main = ps.main;
+            main.maxParticles = 2048;
             main.startLifetime = 0.35f;
             main.startSpeed = startSpeed;
             main.startSize = startSize;
@@ -63,7 +66,9 @@ namespace GameHolder.PureDots
             var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
             if (shader != null)
             {
-                renderer.sharedMaterial = new Material(shader) { color = color };
+                var material = new Material(shader) { color = color };
+                renderer.sharedMaterial = material;
+                m_OwnedMaterials[m_MaterialCount++] = material;
             }
 
             return ps;
@@ -71,7 +76,7 @@ namespace GameHolder.PureDots
 
         public void EmitDeathBurst(Vector2 position, int count = 8)
         {
-            if (m_DeathParticleSystem == null) return;
+            if (m_DeathParticleSystem == null || !Reserve(ref count)) return;
 
             var emitParams = new ParticleSystem.EmitParams
             {
@@ -83,7 +88,7 @@ namespace GameHolder.PureDots
 
         public void EmitHitBurst(Vector2 position, int count = 5)
         {
-            if (m_HitParticleSystem == null) return;
+            if (m_HitParticleSystem == null || !Reserve(ref count)) return;
 
             var emitParams = new ParticleSystem.EmitParams
             {
@@ -95,7 +100,7 @@ namespace GameHolder.PureDots
 
         public void EmitGemCollectBurst(Vector2 position, int count = 6)
         {
-            if (m_GemCollectParticleSystem == null) return;
+            if (m_GemCollectParticleSystem == null || !Reserve(ref count)) return;
 
             var emitParams = new ParticleSystem.EmitParams
             {
@@ -105,6 +110,24 @@ namespace GameHolder.PureDots
             m_GemCollectParticleSystem.Emit(emitParams, count);
         }
 
+        public void BeginFrame() { m_EmitCalls = 0; m_EmittedParticles = 0; }
+        private bool Reserve(ref int count)
+        {
+            count = Mathf.Min(count, 512 - m_EmittedParticles);
+            if (count <= 0 || m_EmitCalls >= 64) return false;
+            m_EmitCalls++; m_EmittedParticles += count; return true;
+        }
+        public void ClearAll()
+        {
+            if (m_DeathParticleSystem != null) m_DeathParticleSystem.Clear();
+            if (m_HitParticleSystem != null) m_HitParticleSystem.Clear();
+            if (m_GemCollectParticleSystem != null) m_GemCollectParticleSystem.Clear();
+        }
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            for (int i = 0; i < m_MaterialCount; i++) GamePresentationBootstrap.DestroyOwned(m_OwnedMaterials[i]);
+        }
         public void ShiftAllParticles(Vector2 rebaseDelta)
         {
             Vector3 delta = new Vector3(rebaseDelta.x, rebaseDelta.y, 0.0f);
@@ -121,10 +144,7 @@ namespace GameHolder.PureDots
             int count = ps.particleCount;
             if (count == 0) return;
 
-            if (m_ParticlesBuffer.Length < count)
-            {
-                m_ParticlesBuffer = new ParticleSystem.Particle[count + 256];
-            }
+            count = Mathf.Min(count, m_ParticlesBuffer.Length);
 
             int alive = ps.GetParticles(m_ParticlesBuffer, count);
             for (int i = 0; i < alive; i++)

@@ -11,8 +11,8 @@ namespace GameHolder.PureDots
         [SerializeField] private int m_AudioSourcePoolSize = 16;
         [SerializeField] private int m_MaxConcurrentPerSound = 3;
 
-        private readonly Dictionary<AudioClip, int> m_FrameCounts = new Dictionary<AudioClip, int>();
-        private readonly List<AudioSource> m_AudioSources = new List<AudioSource>();
+        private readonly Dictionary<AudioClip, int> m_FrameCounts = new Dictionary<AudioClip, int>(3);
+        private readonly List<AudioSource> m_AudioSources = new List<AudioSource>(16);
         private int m_CurrentSourceIndex;
 
         private void Awake()
@@ -32,6 +32,9 @@ namespace GameHolder.PureDots
             }
         }
 
+        public void StopAll()
+        { for (int i = 0; i < m_AudioSources.Count; i++) m_AudioSources[i].Stop(); }
+        private void OnDestroy() { if (Instance == this) Instance = null; }
         public void ResetFrameCounters()
         {
             m_FrameCounts.Clear();

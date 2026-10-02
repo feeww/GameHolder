@@ -1,14 +1,18 @@
 {
-  "name": "GameHolder.PureDots",
+  "name": "GameHolder.PureDots.Editor",
   "rootNamespace": "GameHolder.PureDots",
   "references": [
+    "GameHolder.PureDots",
+    "GameHolder.PureDots.Presentation",
+    "GameHolder.PureDots.Bootstrap",
     "Unity.Entities",
     "Unity.Mathematics",
     "Unity.Collections",
-    "Unity.Burst",
     "Unity.Transforms"
   ],
-  "includePlatforms": [],
+  "includePlatforms": [
+    "Editor"
+  ],
   "allowUnsafeCode": true,
   "autoReferenced": true,
   "noEngineReferences": false

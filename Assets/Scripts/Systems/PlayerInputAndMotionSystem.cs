@@ -1,63 +1,185 @@
 using Unity.Burst;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
     [BurstCompile]
-    [UpdateInGroup(typeof(SimulationSystemGroup))]
-    public partial struct PlayerInputAndMotionSystem : ISystem
+    public struct SimulationControlJob : IJob
     {
-        [BurstCompile]
-        public void OnCreate(ref SystemState state)
+        public SimulationAccess A;
+        public float Dt;
+        public void Execute()
         {
-            state.RequireForUpdate<SimulationCameraBounds>();
-        }
-
-        [BurstCompile]
-        public void OnUpdate(ref SystemState state)
-        {
-            float dt = SystemAPI.Time.DeltaTime;
-            if (dt <= 0.0f) return;
-
-            ref var cameraBounds = ref SystemAPI.GetSingletonRW<SimulationCameraBounds>().ValueRW;
-
-            foreach (var (transform, velocity, invuln, stats, input) in
-                     SystemAPI.Query<RefRW<LocalTransform>, RefRW<MovementVelocity>, RefRW<PlayerInvulnerability>, RefRO<PlayerStats>, RefRO<PlayerInputData>>()
-                         .WithAll<PlayerTag>())
+            var run = A.Run[A.State];
+            run.RebaseDelta = float2.zero;
+            while (A.Commands.TryDequeue(out var command))
             {
-                if (stats.ValueRO.IsDead != 0)
+                switch (command.Kind)
                 {
-                    velocity.ValueRW.Value = float2.zero;
-                    return;
+                    case SimulationCommandKind.SpawnExtra:
+                        run.ExtraSpawns = math.min(SimulationConstants.MaxEnemies, run.ExtraSpawns + math.max(0, command.Value)); break;
+                    case SimulationCommandKind.GodMode:
+                        run.GodMode = (byte)(command.Value != 0 ? 1 : 0);
+                        if (run.GodMode != 0)
+                        {
+                            var healed = A.Stats[run.Player]; healed.CurrentHealth = healed.MaxHealth; healed.IsDead = 0;
+                            A.Stats[run.Player] = healed;
+                        }
+                        break;
+                    case SimulationCommandKind.AutoAttack: run.AutoAttack = (byte)(command.Value != 0 ? 1 : 0); break;
+                    case SimulationCommandKind.ForceRebase: run.ForceRebase = 1; break;
+                    case SimulationCommandKind.KillAll:
+                        for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+                        {
+                            Entity e = A.EnemyPool.AllEnemies[i];
+                            if (A.Enemies.IsComponentEnabled(e)) A.Damage.Enqueue(new DamageEvent
+                            { TargetEntity = e, TargetKey = DamageEvent.CreateTargetKey(e), Damage = float.MaxValue });
+                        }
+                        break;
+                    case SimulationCommandKind.Restart: Reset(ref run); break;
                 }
-
-                float2 moveDir = input.ValueRO.MoveInput;
-                float dirLenSq = math.lengthsq(moveDir);
-                if (dirLenSq > 1.0f)
-                {
-                    moveDir = math.normalize(moveDir);
-                }
-
-                float2 targetVel = moveDir * stats.ValueRO.MoveSpeed;
-                velocity.ValueRW.Value = targetVel;
-
-                float3 pos = transform.ValueRO.Position;
-                pos.xy += targetVel * dt;
-                transform.ValueRW.Position = pos;
-
-                // Decrement invulnerability timer
-                invuln.ValueRW.Timer = math.max(0.0f, invuln.ValueRO.Timer - dt);
-
-                // Synchronously update authoritative camera position anchor
-                cameraBounds.CameraPosition = pos.xy;
+            }
+            var stats = A.Stats[run.Player];
+            var invulnerability = A.Invulnerability[run.Player];
+            invulnerability.Timer = math.max(0, invulnerability.Timer - Dt);
+            A.Invulnerability[run.Player] = invulnerability;
+            run.PreviousPlayerPosition = A.Transforms[run.Player].Position.xy;
+            run.PlayerVelocity = stats.IsDead == 0 ? math.normalizesafe(A.Input[A.InputEntity].Movement) * stats.MoveSpeed : float2.zero;
+            run.PlayerVelocity *= CrowdSpeedScale(run.PreviousPlayerPosition, run.PlayerVelocity * Dt);
+            run.PlayerPosition = run.PreviousPlayerPosition + run.PlayerVelocity * Dt;
+            if (run.ForceRebase != 0 || math.lengthsq(run.PlayerPosition) > SimulationConstants.FloatingOriginThresholdSq)
+            {
+                // Debug teleport deliberately uses a non-tile-aligned delta to exercise phase preservation.
+                if (run.ForceRebase != 0) run.PlayerPosition += new float2(2100.25f, 2100.75f);
+                run.RebaseDelta = run.PlayerPosition;
+                run.WorldOrigin += (double2)run.RebaseDelta;
+                run.PreviousPlayerPosition -= run.RebaseDelta;
+                run.PlayerPosition = float2.zero;
+                run.ForceRebase = 0;
+                ShiftPools(run.RebaseDelta);
+            }
+            A.Transforms[run.Player] = LocalTransform.FromPosition(new float3(run.PlayerPosition, 0));
+            A.Previous[run.Player] = new PreviousPosition { Value = run.PreviousPlayerPosition };
+            A.Velocities[run.Player] = new MovementVelocity { Value = run.PlayerVelocity };
+            run.Tick++;
+            A.Run[A.State] = run;
+        }
+        private float CrowdSpeedScale(float2 position, float2 step)
+        {
+            float stepSq = math.lengthsq(step);
+            if (stepSq < 1e-12f) return 1;
+            float stepLength = math.sqrt(stepSq);
+            float2 direction = step / stepLength;
+            float load = 0, pushScale = 1;
+            // One exact O(N) sweep for the player; density must not be truncated by the enemy query budget.
+            for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+            {
+                Entity e = A.EnemyPool.AllEnemies[i];
+                if (!A.Enemies.IsComponentEnabled(e)) continue;
+                float2 offset = A.Transforms[e].Position.xy - position;
+                if (math.dot(offset, direction) < 0) continue;
+                var config = A.Catalog.Value.Configs[(int)A.Types[e].Value];
+                float clearance = SimulationConstants.PlayerCollisionRadius + config.CollisionRadius + SimulationConstants.PlayerContactSkin;
+                if (SweptCollision.TryHit(offset, offset - step, clearance, out float contactTime))
+                    pushScale = math.min(pushScale, contactTime + SimulationConstants.PlayerCrowdPushSpeed * Dt / (math.max(1, config.Mass) * stepLength));
+                float radius = SimulationConstants.PlayerCollisionRadius + config.CollisionRadius +
+                    SimulationConstants.PlayerContactSkin + SimulationConstants.CrowdSteeringMargin;
+                float t = math.saturate(math.dot(offset, step) / stepSq);
+                float weight = math.saturate(1 - math.length(offset - step * t) / radius);
+                load += weight * weight * config.Mass;
+            }
+            // The minimum input speed wins at extreme mass/density, so the player can always escape.
+            return math.max(SimulationConstants.PlayerCrowdMinimumSpeed, math.min(pushScale, 1 / (1 + load * SimulationConstants.PlayerCrowdResistance)));
+        }
+        private void Reset(ref SimulationRunState run)
+        {
+            uint generation = run.Generation + 1;
+            Entity player = run.Player;
+            byte godMode = run.GodMode, autoAttack = run.AutoAttack;
+            run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack };
+            A.Stats[player] = RunDefaults.Player;
+            A.Invulnerability[player] = new PlayerInvulnerability
+            { Timer = SimulationConstants.PlayerRespawnGracePeriod, InvulnerabilityDuration = SimulationConstants.PlayerDefaultInvulnDuration };
+            A.Transforms[player] = LocalTransform.Identity;
+            A.Previous[player] = default;
+            A.Waves[A.Wave] = RunDefaults.Wave;
+            A.Grid.Clear(); A.CrowdCells.Clear(); A.Damage.Clear(); A.PlayerDamage.Clear(); A.Deactivations.Clear(); A.GemSpawns.Clear();
+            A.Bridge.DeathEventQueue.Clear(); A.Bridge.HitReactionEventQueue.Clear();
+            A.Bridge.GemCollectEventQueue.Clear(); A.Bridge.RebaseEventQueue.Clear();
+            A.EnemyPool.InactiveEnemies.Clear();
+            for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+            {
+                Entity e = A.EnemyPool.AllEnemies[i];
+                A.Enemies.SetComponentEnabled(e, false); A.Ranged.SetComponentEnabled(e, false);
+                A.Separation[e] = default; A.MeleeCooldown[e] = default; A.RangedCooldown[e] = default;
+                A.Velocities[e] = default; A.Previous[e] = default; A.Transforms[e] = LocalTransform.Identity;
+                A.EnemyPool.InactiveEnemies.Enqueue(e);
+            }
+            ResetProjectiles(A.PlayerPool.AllProjectiles, A.PlayerPool.InactiveProjectiles);
+            ResetProjectiles(A.EnemyProjectilePool.AllProjectiles, A.EnemyProjectilePool.InactiveProjectiles);
+            A.GemPool.FreeGems.Clear();
+            for (int i = 0; i < A.GemPool.AllGems.Length; i++)
+            {
+                var record = A.GemPool.AllGems[i];
+                record.Position = float2.zero; record.IsActive = 0; record.ExperienceValue = 0; record.Tier = 0;
+                A.GemPool.AllGems[i] = record;
+                A.GemData[record.Entity] = new GemData { SlotIndex = (uint)i };
+                A.Gems.SetComponentEnabled(record.Entity, false);
+                A.Transforms[record.Entity] = LocalTransform.Identity;
+                A.GemPool.FreeGems.Enqueue(record.Entity);
             }
         }
-
-        [BurstCompile]
-        public void OnDestroy(ref SystemState state)
+        private void ResetProjectiles(Unity.Collections.LowLevel.Unsafe.UnsafeList<Entity> entities,
+            Unity.Collections.UnsafeQueue<Entity> pool)
         {
+            pool.Clear();
+            for (int i = 0; i < entities.Length; i++)
+            {
+                Entity e = entities[i];
+                A.Projectiles.SetComponentEnabled(e, false); A.ProjectileData[e] = default;
+                A.Transforms[e] = LocalTransform.Identity; A.Previous[e] = default; A.Velocities[e] = default;
+                pool.Enqueue(e);
+            }
+        }
+        private void ShiftPools(float2 delta)
+        {
+            int deaths = A.Bridge.DeathEventQueue.Count;
+            for (int i = 0; i < deaths; i++)
+            {
+                A.Bridge.DeathEventQueue.TryDequeue(out var death); death.Position -= delta;
+                A.Bridge.DeathEventQueue.Enqueue(death);
+            }
+            int collected = A.Bridge.GemCollectEventQueue.Count;
+            for (int i = 0; i < collected; i++)
+            {
+                A.Bridge.GemCollectEventQueue.TryDequeue(out var gem); gem.Position -= delta;
+                A.Bridge.GemCollectEventQueue.Enqueue(gem);
+            }
+            for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+            {
+                Entity e = A.EnemyPool.AllEnemies[i];
+                if (A.Enemies.IsComponentEnabled(e)) Shift(e, delta);
+            }
+            for (int i = 0; i < A.PlayerPool.AllProjectiles.Length; i++)
+                if (A.Projectiles.IsComponentEnabled(A.PlayerPool.AllProjectiles[i])) Shift(A.PlayerPool.AllProjectiles[i], delta);
+            for (int i = 0; i < A.EnemyProjectilePool.AllProjectiles.Length; i++)
+                if (A.Projectiles.IsComponentEnabled(A.EnemyProjectilePool.AllProjectiles[i])) Shift(A.EnemyProjectilePool.AllProjectiles[i], delta);
+            for (int i = 0; i < A.GemPool.AllGems.Length; i++)
+            {
+                var record = A.GemPool.AllGems[i];
+                if (record.IsActive == 0) continue;
+                record.Position -= delta; A.GemPool.AllGems[i] = record;
+                Shift(record.Entity, delta);
+            }
+        }
+        private void Shift(Entity e, float2 delta)
+        {
+            var transform = A.Transforms[e]; transform.Position.xy -= delta; A.Transforms[e] = transform;
+            if (A.Previous.HasComponent(e))
+            { var previous = A.Previous[e]; previous.Value -= delta; A.Previous[e] = previous; }
         }
     }
 }

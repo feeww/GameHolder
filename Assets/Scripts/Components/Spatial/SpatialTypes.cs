@@ -10,7 +10,16 @@ namespace GameHolder.PureDots
         public Entity Entity;    // 8 bytes
         public float2 Position;  // 8 bytes
         public int2 CellCoord;   // 8 bytes
-        public float2 Padding;   // 8 bytes (Total: exactly 32 bytes)
+        public float2 PreviousPosition;
+        public float Radius;
+        public float PushPriority;
+    }
+
+    public struct CrowdCell
+    {
+        public int Count;
+        public float Density;
+        public float PrioritySum;
     }
 
     public static class SpatialHashUtils
@@ -46,6 +55,7 @@ namespace GameHolder.PureDots
     public struct EnemySpatialGridSingleton : IComponentData
     {
         public UnsafeParallelMultiHashMap<uint, GridEntry> Grid;
+        public UnsafeParallelHashMap<int2, CrowdCell> CrowdCells;
     }
 
     public struct EnemyProjectileGridSingleton : IComponentData

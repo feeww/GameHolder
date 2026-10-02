@@ -9,9 +9,9 @@ namespace GameHolder.PureDots
         public float MaxHealth;
         public float MoveSpeed;
         public float CollisionRadius;
-        public float VisualRadius;
+        public float Mass;
+        public float AttackRange;
         public float BaseDamage;
-        public float4 InitialUV;
         public uint ExperienceValue;
         public float SpeedVariation;
     }

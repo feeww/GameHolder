@@ -10,7 +10,7 @@ namespace GameHolder.PureDots
     {
         protected override void OnCreate()
         {
-            RequireForUpdate<PlayerTag>();
+            RequireForUpdate<SimulationInput>();
         }
 
         protected override void OnUpdate()
@@ -36,10 +36,7 @@ namespace GameHolder.PureDots
                 }
             }
 
-            foreach (var inputData in SystemAPI.Query<RefRW<PlayerInputData>>().WithAll<PlayerTag>())
-            {
-                inputData.ValueRW.MoveInput = input;
-            }
+            SystemAPI.SetSingleton(new SimulationInput { Movement = input });
         }
     }
 }
