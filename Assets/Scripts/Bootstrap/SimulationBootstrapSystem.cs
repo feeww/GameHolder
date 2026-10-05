@@ -25,7 +25,8 @@ namespace GameHolder.PureDots
         public void OnUpdate(ref SystemState state)
         {
             if (m_Initialized) return;
-            if (!SystemAPI.HasSingleton<PureDotsPrefabsSingleton>()) return;
+            if (!SystemAPI.HasSingleton<PureDotsPrefabsSingleton>() || !SystemAPI.HasSingleton<StartingPlayerConfig>() ||
+                !SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>()) return;
             m_Initialized = true;
 
             var prefabs = SystemAPI.GetSingleton<PureDotsPrefabsSingleton>();
@@ -40,78 +41,7 @@ namespace GameHolder.PureDots
 
             // 3. Wave spawner config singleton
             var spawnerEntity = em.CreateEntity();
-            em.AddComponentData(spawnerEntity, new WaveSpawnerConfig
-            {
-                SpawnInterval = 0.5f,
-                Timer = 0.0f,
-                BatchSize = 35,
-                MinRadius = 18.0f,
-                MaxRadius = 40.0f,
-                RandomSeed = 777123u
-            });
-
-            // 4. Enemy Config Catalog BlobAsset
-            var builder = new BlobBuilder(Allocator.Temp);
-            ref var catalogRoot = ref builder.ConstructRoot<EnemyConfigCatalog>();
-            var configsArray = builder.Allocate(ref catalogRoot.Configs, 4);
-
-            // Type 0: Tank ("Anvil")
-            configsArray[0] = new EnemyConfigData
-            {
-                MaxHealth = 80.0f,
-                MoveSpeed = 2.4f,
-                CollisionRadius = 0.5f,
-                Mass = 4.0f,
-                AttackRange = 0.95f,
-                BaseDamage = 20.0f,
-                ExperienceValue = 25,
-                SpeedVariation = 0.1f
-            };
-
-            // Type 1: Runner ("Hammer")
-            configsArray[1] = new EnemyConfigData
-            {
-                MaxHealth = 25.0f,
-                MoveSpeed = 5.2f,
-                CollisionRadius = 0.35f,
-                Mass = 1.0f,
-                AttackRange = 0.8f,
-                BaseDamage = 10.0f,
-                ExperienceValue = 10,
-                SpeedVariation = 0.2f
-            };
-
-            // Type 2: Ranged Skirmisher (Kiting ranged enemy: advances to 7.5m, retreats when < 4.5m)
-            configsArray[2] = new EnemyConfigData
-            {
-                MaxHealth = 35.0f,
-                MoveSpeed = 3.4f,
-                CollisionRadius = 0.4f,
-                Mass = 1.5f,
-                AttackRange = SimulationConstants.RangedSkirmisherAttackRange,
-                BaseDamage = 12.0f,
-                ExperienceValue = 15,
-                SpeedVariation = 0.15f
-            };
-
-            // Type 3: Ranged Sniper (Long-range sniper: advances to 13m, holds ground and does not retreat)
-            configsArray[3] = new EnemyConfigData
-            {
-                MaxHealth = 50.0f,
-                MoveSpeed = 1.8f,
-                CollisionRadius = 0.45f,
-                Mass = 2.0f,
-                AttackRange = SimulationConstants.RangedSniperAttackRange,
-                BaseDamage = 15.0f,
-                ExperienceValue = 20,
-                SpeedVariation = 0.1f
-            };
-
-            var catalogRef = builder.CreateBlobAssetReference<EnemyConfigCatalog>(Allocator.Persistent);
-            builder.Dispose();
-
-            var catalogEntity = em.CreateEntity();
-            em.AddComponentData(catalogEntity, new EnemyConfigCatalogSingleton { Catalog = catalogRef });
+            em.AddComponentData(spawnerEntity, RunDefaults.Wave);
 
             // 5. Spatial Hash Grids (2x over-provisioning for load factor <= 0.5)
             const int maxEnemies = EnemyPoolSingleton.Capacity;
@@ -120,8 +50,8 @@ namespace GameHolder.PureDots
             var enemyGridEntity = em.CreateEntity();
             em.AddComponentData(enemyGridEntity, new EnemySpatialGridSingleton
             {
-                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxEnemies * 2, Allocator.Persistent),
-                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(maxEnemies * 8, Allocator.Persistent)
+                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(SimulationConstants.EnemyGridCapacity, Allocator.Persistent),
+                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(SimulationConstants.CrowdGridCapacity, Allocator.Persistent)
             });
 
             // 6. Combat queues
@@ -263,10 +193,14 @@ namespace GameHolder.PureDots
             em.AddComponentData(enemyProjPoolEntity, enemyProjPoolSingleton);
 
             // 11. Instantiate Player Entity (Prefab already contains default transform, velocity, stats, and invulnerability)
+            var startingPlayer = SystemAPI.GetSingleton<StartingPlayerConfig>();
             var player = em.Instantiate(prefabs.PlayerPrefab);
+            em.SetComponentData(player, startingPlayer.Stats);
+            em.SetComponentData(player, startingPlayer.Weapon);
+            em.SetComponentData(player, new PlayerInvulnerability { InvulnerabilityDuration = startingPlayer.InvulnerabilityDuration });
             var runEntity = em.CreateEntity();
-            em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1 });
-            em.AddComponentData(runEntity, new SimulationSnapshot { Player = RunDefaults.Player, AutoAttack = 1, Generation = 1 });
+            em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1, PlayerCollisionRadius = startingPlayer.Stats.CollisionRadius });
+            em.AddComponentData(runEntity, new SimulationSnapshot { Player = startingPlayer.Stats, AutoAttack = 1, Generation = 1 });
             em.AddComponentData(runEntity, new SimulationJobFence());
             em.AddComponentData(em.CreateEntity(), new SimulationInput());
             em.AddComponentData(em.CreateEntity(), new SimulationCommandQueue { Commands = new UnsafeQueue<SimulationCommand>(Allocator.Persistent) });

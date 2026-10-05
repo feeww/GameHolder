@@ -8,8 +8,9 @@ namespace GameHolder.PureDots
     public sealed class BatchedHudText : Graphic
     {
         private const string Glyphs = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~";
-        private readonly char[] m_Text = new char[512];
-        private readonly CharacterInfo[] m_Glyphs = new CharacterInfo[128];
+        private const int AsciiTableSize = 128, FirstPrintableAscii = 32, PrintableAsciiEnd = 127;
+        private readonly char[] m_Text = new char[PresentationConstants.HudTextCapacity];
+        private readonly CharacterInfo[] m_Glyphs = new CharacterInfo[AsciiTableSize];
         private Font m_Font;
         private int m_Length;
         public override Texture mainTexture => m_Font != null ? m_Font.material.mainTexture : Texture2D.whiteTexture;
@@ -19,14 +20,14 @@ namespace GameHolder.PureDots
             base.Awake();
             raycastTarget = false;
             m_Font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            m_Font.RequestCharactersInTexture(Glyphs, 14, FontStyle.Normal);
+            m_Font.RequestCharactersInTexture(Glyphs, PresentationConstants.HudFontSize, FontStyle.Normal);
             RefreshGlyphs(m_Font);
             Font.textureRebuilt += RefreshGlyphs;
         }
         private void RefreshGlyphs(Font font)
         {
             if (font != m_Font) return;
-            for (int i = 32; i < 127; i++) m_Font.GetCharacterInfo((char)i, out m_Glyphs[i], 14, FontStyle.Normal);
+            for (int i = FirstPrintableAscii; i < PrintableAsciiEnd; i++) m_Font.GetCharacterInfo((char)i, out m_Glyphs[i], PresentationConstants.HudFontSize, FontStyle.Normal);
             SetVerticesDirty();
             SetMaterialDirty();
         }
@@ -50,12 +51,12 @@ namespace GameHolder.PureDots
         {
             vertices.Clear();
             Rect rect = rectTransform.rect;
-            float x = rect.xMin, y = rect.yMax - 17;
+            float x = rect.xMin, y = rect.yMax - PresentationConstants.HudFontBaseline;
             for (int i = 0; i < m_Length; i++)
             {
                 char character = m_Text[i];
-                if (character == '\n') { x = rect.xMin; y -= 26; continue; }
-                if (character < 32 || character >= 127) continue;
+                if (character == '\n') { x = rect.xMin; y -= PresentationConstants.HudLineHeight; continue; }
+                if (character < FirstPrintableAscii || character >= PrintableAsciiEnd) continue;
                 CharacterInfo glyph = m_Glyphs[character];
                 if (character != ' ')
                 {

@@ -47,13 +47,14 @@ namespace GameHolder.PureDots
             invulnerability.Timer = math.max(0, invulnerability.Timer - Dt);
             A.Invulnerability[run.Player] = invulnerability;
             run.PreviousPlayerPosition = A.Transforms[run.Player].Position.xy;
-            run.PlayerVelocity = stats.IsDead == 0 ? math.normalizesafe(A.Input[A.InputEntity].Movement) * stats.MoveSpeed : float2.zero;
-            run.PlayerVelocity *= CrowdSpeedScale(run.PreviousPlayerPosition, run.PlayerVelocity * Dt);
+            float2 movement = A.Input[A.InputEntity].Movement;
+            run.PlayerVelocity = stats.IsDead == 0 ? movement / math.max(1, math.length(movement)) * stats.MoveSpeed : float2.zero;
+            run.PlayerVelocity *= CrowdSpeedScale(run.PreviousPlayerPosition, run.PlayerVelocity * Dt, run.PlayerCollisionRadius);
             run.PlayerPosition = run.PreviousPlayerPosition + run.PlayerVelocity * Dt;
             if (run.ForceRebase != 0 || math.lengthsq(run.PlayerPosition) > SimulationConstants.FloatingOriginThresholdSq)
             {
                 // Debug teleport deliberately uses a non-tile-aligned delta to exercise phase preservation.
-                if (run.ForceRebase != 0) run.PlayerPosition += new float2(2100.25f, 2100.75f);
+                if (run.ForceRebase != 0) run.PlayerPosition += SimulationConstants.DebugRebaseOffset;
                 run.RebaseDelta = run.PlayerPosition;
                 run.WorldOrigin += (double2)run.RebaseDelta;
                 run.PreviousPlayerPosition -= run.RebaseDelta;
@@ -67,10 +68,10 @@ namespace GameHolder.PureDots
             run.Tick++;
             A.Run[A.State] = run;
         }
-        private float CrowdSpeedScale(float2 position, float2 step)
+        private float CrowdSpeedScale(float2 position, float2 step, float playerRadius)
         {
             float stepSq = math.lengthsq(step);
-            if (stepSq < 1e-12f) return 1;
+            if (stepSq < NumericalConstants.MinimumSweepLengthSq) return 1;
             float stepLength = math.sqrt(stepSq);
             float2 direction = step / stepLength;
             float load = 0, pushScale = 1;
@@ -82,27 +83,28 @@ namespace GameHolder.PureDots
                 float2 offset = A.Transforms[e].Position.xy - position;
                 if (math.dot(offset, direction) < 0) continue;
                 var config = A.Catalog.Value.Configs[(int)A.Types[e].Value];
-                float clearance = SimulationConstants.PlayerCollisionRadius + config.CollisionRadius + SimulationConstants.PlayerContactSkin;
+                float clearance = playerRadius + config.CollisionRadius + CrowdConstants.PlayerContactSkin;
                 if (SweptCollision.TryHit(offset, offset - step, clearance, out float contactTime))
-                    pushScale = math.min(pushScale, contactTime + SimulationConstants.PlayerCrowdPushSpeed * Dt / (math.max(1, config.Mass) * stepLength));
-                float radius = SimulationConstants.PlayerCollisionRadius + config.CollisionRadius +
-                    SimulationConstants.PlayerContactSkin + SimulationConstants.CrowdSteeringMargin;
+                    pushScale = math.min(pushScale, contactTime + CrowdConstants.PlayerCrowdPushSpeed * Dt / (math.max(1, config.Mass) * stepLength));
+                float radius = playerRadius + config.CollisionRadius +
+                    CrowdConstants.PlayerContactSkin + CrowdConstants.CrowdSteeringMargin;
                 float t = math.saturate(math.dot(offset, step) / stepSq);
                 float weight = math.saturate(1 - math.length(offset - step * t) / radius);
                 load += weight * weight * config.Mass;
             }
             // The minimum input speed wins at extreme mass/density, so the player can always escape.
-            return math.max(SimulationConstants.PlayerCrowdMinimumSpeed, math.min(pushScale, 1 / (1 + load * SimulationConstants.PlayerCrowdResistance)));
+            return math.max(CrowdConstants.PlayerCrowdMinimumSpeed, math.min(pushScale, 1 / (1 + load * CrowdConstants.PlayerCrowdResistance)));
         }
         private void Reset(ref SimulationRunState run)
         {
             uint generation = run.Generation + 1;
             Entity player = run.Player;
             byte godMode = run.GodMode, autoAttack = run.AutoAttack;
-            run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack };
-            A.Stats[player] = RunDefaults.Player;
+            run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack, PlayerCollisionRadius = A.StartingPlayer.Stats.CollisionRadius };
+            A.Stats[player] = A.StartingPlayer.Stats;
+            A.Weapons[player] = A.StartingPlayer.Weapon;
             A.Invulnerability[player] = new PlayerInvulnerability
-            { Timer = SimulationConstants.PlayerRespawnGracePeriod, InvulnerabilityDuration = SimulationConstants.PlayerDefaultInvulnDuration };
+            { Timer = A.StartingPlayer.RespawnGracePeriod, InvulnerabilityDuration = A.StartingPlayer.InvulnerabilityDuration };
             A.Transforms[player] = LocalTransform.Identity;
             A.Previous[player] = default;
             A.Waves[A.Wave] = RunDefaults.Wave;
@@ -140,6 +142,8 @@ namespace GameHolder.PureDots
             {
                 Entity e = entities[i];
                 A.Projectiles.SetComponentEnabled(e, false); A.ProjectileData[e] = default;
+                if (A.Explosives.HasComponent(e)) { A.Explosives.SetComponentEnabled(e, false); A.Explosives[e] = default; }
+                if (A.Lasers.HasComponent(e)) { A.Lasers.SetComponentEnabled(e, false); A.Lasers[e] = default; }
                 A.Transforms[e] = LocalTransform.Identity; A.Previous[e] = default; A.Velocities[e] = default;
                 pool.Enqueue(e);
             }

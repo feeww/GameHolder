@@ -10,8 +10,8 @@ namespace GameHolder.PureDots
     {
         private double2 m_WorldOrigin;
         private uint m_Generation;
-        private readonly float2[] m_DeathPositions = new float2[4];
-        private readonly int[] m_DeathCounts = new int[4];
+        private readonly float2[] m_DeathPositions = new float2[PresentationConstants.DeathBatchCount];
+        private readonly int[] m_DeathCounts = new int[PresentationConstants.DeathBatchCount];
         protected override void OnCreate() => RequireForUpdate<SimulationJobFence>();
         protected override void OnUpdate()
         {
@@ -45,39 +45,39 @@ namespace GameHolder.PureDots
                 }
                 m_WorldOrigin = snapshot.WorldOrigin;
             }
-            for (int i = 0; i < 4; i++) { m_DeathCounts[i] = 0; m_DeathPositions[i] = float2.zero; }
+            for (int i = 0; i < m_DeathCounts.Length; i++) { m_DeathCounts[i] = 0; m_DeathPositions[i] = float2.zero; }
             while (queues.DeathEventQueue.TryDequeue(out var death))
             {
-                if (death.TypeId == SimulationConstants.PlayerTypeId)
+                if (death.TypeId == CombatConstants.PlayerTypeId)
                 {
-                    if (particles != null) particles.EmitDeathBurst(death.Position, 32);
+                    if (particles != null) particles.EmitDeathBurst(death.Position, PresentationConstants.MaxBurstParticles);
                     if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.PlayerHitClip);
                 }
                 else
                 {
-                    int type = (int)math.min(death.TypeId, 3);
+                    int type = (int)math.min(death.TypeId, (uint)(m_DeathCounts.Length - 1));
                     m_DeathPositions[type] += death.Position; m_DeathCounts[type]++;
                 }
             }
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < m_DeathCounts.Length; i++)
             {
                 if (m_DeathCounts[i] == 0) continue;
-                if (particles != null) particles.EmitDeathBurst(m_DeathPositions[i] / m_DeathCounts[i], math.min(32, m_DeathCounts[i] * 8));
-                if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.EnemyDeathClip, .45f);
+                if (particles != null) particles.EmitDeathBurst(m_DeathPositions[i] / m_DeathCounts[i], math.min(PresentationConstants.MaxBurstParticles, m_DeathCounts[i] * PresentationConstants.DeathBurstParticles));
+                if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.EnemyDeathClip, PresentationConstants.EnemyDeathVolume);
             }
             bool gotHit = false;
             while (queues.HitReactionEventQueue.TryDequeue(out _)) gotHit = true;
             if (gotHit)
             {
-                if (particles != null) particles.EmitHitBurst(snapshot.PlayerPosition, 6);
-                if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.PlayerHitClip, .6f);
+                if (particles != null) particles.EmitHitBurst(snapshot.PlayerPosition, PresentationConstants.HitBurstParticles);
+                if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.PlayerHitClip, PresentationConstants.PlayerHitVolume);
             }
             float2 gemPosition = float2.zero; int gems = 0;
             while (queues.GemCollectEventQueue.TryDequeue(out var gem)) { gemPosition += gem.Position; gems++; }
             if (gems > 0)
             {
-                if (particles != null) particles.EmitGemCollectBurst(gemPosition / gems, math.min(32, gems * 6));
-                if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.GemCollectClip, .35f);
+                if (particles != null) particles.EmitGemCollectBurst(gemPosition / gems, math.min(PresentationConstants.MaxBurstParticles, gems * PresentationConstants.GemBurstParticles));
+                if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.GemCollectClip, PresentationConstants.GemCollectVolume);
             }
             if (camera != null) camera.UpdateCameraPosition(snapshot.PlayerPosition, SystemAPI.Time.DeltaTime);
             if (PureDotsHUD.Instance != null)

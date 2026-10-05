@@ -11,7 +11,7 @@ namespace GameHolder.PureDots
         [SerializeField] private ParticleSystem m_GemCollectParticleSystem;
 
         private ParticleSystem.Particle[] m_ParticlesBuffer;
-        private readonly Material[] m_OwnedMaterials = new Material[3];
+        private readonly Material[] m_OwnedMaterials = new Material[PresentationConstants.ParticleSystemCount];
         private int m_MaterialCount, m_EmitCalls, m_EmittedParticles;
 
         private void Awake()
@@ -23,19 +23,19 @@ namespace GameHolder.PureDots
             }
             Instance = this;
 
-            m_ParticlesBuffer = new ParticleSystem.Particle[2048];
+            m_ParticlesBuffer = new ParticleSystem.Particle[PresentationConstants.ParticleCapacity];
 
             if (m_DeathParticleSystem == null)
             {
-                m_DeathParticleSystem = CreateProceduralParticleSystem("ProceduralDeathFX", new Color(1.0f, 0.35f, 0.2f, 1.0f), 0.35f, 4.0f);
+                m_DeathParticleSystem = CreateProceduralParticleSystem("ProceduralDeathFX", PresentationConstants.DeathParticleColor, PresentationConstants.DeathParticleSize, PresentationConstants.DeathParticleSpeed);
             }
             if (m_HitParticleSystem == null)
             {
-                m_HitParticleSystem = CreateProceduralParticleSystem("ProceduralHitFX", new Color(1.0f, 0.9f, 0.2f, 1.0f), 0.25f, 3.0f);
+                m_HitParticleSystem = CreateProceduralParticleSystem("ProceduralHitFX", PresentationConstants.HitParticleColor, PresentationConstants.HitParticleSize, PresentationConstants.HitParticleSpeed);
             }
             if (m_GemCollectParticleSystem == null)
             {
-                m_GemCollectParticleSystem = CreateProceduralParticleSystem("ProceduralGemFX", new Color(0.2f, 1.0f, 0.8f, 1.0f), 0.2f, 2.5f);
+                m_GemCollectParticleSystem = CreateProceduralParticleSystem("ProceduralGemFX", PresentationConstants.GemParticleColor, PresentationConstants.GemParticleSize, PresentationConstants.GemParticleSpeed);
             }
         }
 
@@ -45,8 +45,8 @@ namespace GameHolder.PureDots
             go.transform.SetParent(transform);
             var ps = go.AddComponent<ParticleSystem>();
             var main = ps.main;
-            main.maxParticles = 2048;
-            main.startLifetime = 0.35f;
+            main.maxParticles = PresentationConstants.ParticleCapacity;
+            main.startLifetime = PresentationConstants.ParticleLifetime;
             main.startSpeed = startSpeed;
             main.startSize = startSize;
             main.startColor = color;
@@ -59,7 +59,7 @@ namespace GameHolder.PureDots
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.2f;
+            shape.radius = PresentationConstants.ParticleSpawnRadius;
 
             var renderer = go.GetComponent<ParticleSystemRenderer>();
             renderer.renderMode = ParticleSystemRenderMode.Billboard;
@@ -74,37 +74,37 @@ namespace GameHolder.PureDots
             return ps;
         }
 
-        public void EmitDeathBurst(Vector2 position, int count = 8)
+        public void EmitDeathBurst(Vector2 position, int count = PresentationConstants.DeathBurstParticles)
         {
             if (m_DeathParticleSystem == null || !Reserve(ref count)) return;
 
             var emitParams = new ParticleSystem.EmitParams
             {
-                position = new Vector3(position.x, position.y, -0.1f),
+                position = new Vector3(position.x, position.y, PresentationConstants.ParticleZ),
                 applyShapeToPosition = true
             };
             m_DeathParticleSystem.Emit(emitParams, count);
         }
 
-        public void EmitHitBurst(Vector2 position, int count = 5)
+        public void EmitHitBurst(Vector2 position, int count = PresentationConstants.DefaultHitBurstParticles)
         {
             if (m_HitParticleSystem == null || !Reserve(ref count)) return;
 
             var emitParams = new ParticleSystem.EmitParams
             {
-                position = new Vector3(position.x, position.y, -0.1f),
+                position = new Vector3(position.x, position.y, PresentationConstants.ParticleZ),
                 applyShapeToPosition = true
             };
             m_HitParticleSystem.Emit(emitParams, count);
         }
 
-        public void EmitGemCollectBurst(Vector2 position, int count = 6)
+        public void EmitGemCollectBurst(Vector2 position, int count = PresentationConstants.GemBurstParticles)
         {
             if (m_GemCollectParticleSystem == null || !Reserve(ref count)) return;
 
             var emitParams = new ParticleSystem.EmitParams
             {
-                position = new Vector3(position.x, position.y, -0.1f),
+                position = new Vector3(position.x, position.y, PresentationConstants.ParticleZ),
                 applyShapeToPosition = true
             };
             m_GemCollectParticleSystem.Emit(emitParams, count);
@@ -113,8 +113,8 @@ namespace GameHolder.PureDots
         public void BeginFrame() { m_EmitCalls = 0; m_EmittedParticles = 0; }
         private bool Reserve(ref int count)
         {
-            count = Mathf.Min(count, 512 - m_EmittedParticles);
-            if (count <= 0 || m_EmitCalls >= 64) return false;
+            count = Mathf.Min(count, PresentationConstants.ParticlesPerFrame - m_EmittedParticles);
+            if (count <= 0 || m_EmitCalls >= PresentationConstants.EmitCallsPerFrame) return false;
             m_EmitCalls++; m_EmittedParticles += count; return true;
         }
         public void ClearAll()

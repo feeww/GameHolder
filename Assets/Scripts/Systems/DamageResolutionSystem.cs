@@ -21,10 +21,15 @@ namespace GameHolder.PureDots
         public SimulationAccess A;
         public NativeList<DamageEvent> Damage;
         public NativeList<Entity> Deactivations;
+        public NativeParallelHashMap<Entity, float> AreaDamage;
         public void Execute()
         {
             var run = A.Run[A.State];
             Damage.Clear();
+            // Area weapons stage at most one event per enemy, regardless of overlapping shots.
+            foreach (var entry in AreaDamage)
+                Damage.Add(new DamageEvent { TargetEntity = entry.Key, TargetKey = DamageEvent.CreateTargetKey(entry.Key), Damage = entry.Value });
+            AreaDamage.Clear();
             while (A.Damage.TryDequeue(out var damage)) Damage.Add(damage);
             Damage.AsArray().Sort(new DamageEventComparator());
             for (int i = 0; i < Damage.Length;)
@@ -39,7 +44,7 @@ namespace GameHolder.PureDots
                 A.EnemyPool.InactiveEnemies.Enqueue(e); run.ActiveEnemies--; run.Kills++;
                 float2 position = A.Transforms[e].Position.xy; uint type = A.Types[e].Value;
                 A.GemSpawns.Enqueue(new GemSpawnRequest { Position = position, ExperienceValue = A.Catalog.Value.Configs[(int)type].ExperienceValue });
-                if (A.Bridge.DeathEventQueue.Count < RunDefaults.CosmeticQueueCapacity)
+                if (A.Bridge.DeathEventQueue.Count < SimulationConstants.CosmeticQueueCapacity)
                     A.Bridge.DeathEventQueue.Enqueue(new DeathEvent { Position = position, TypeId = type });
             }
             Deactivations.Clear();
@@ -56,6 +61,7 @@ namespace GameHolder.PureDots
             PlayerDamageEvent best = default; bool hasHit = false;
             while (A.PlayerDamage.TryDequeue(out var hit))
             {
+                if (!(hit.Damage > 0)) continue;
                 if (!hasHit || hit.HitTime < best.HitTime || hit.HitTime == best.HitTime &&
                     DamageEvent.CreateTargetKey(hit.SourceEntity) < DamageEvent.CreateTargetKey(best.SourceEntity))
                 { best = hit; hasHit = true; }
@@ -69,10 +75,10 @@ namespace GameHolder.PureDots
                 if (stats.CurrentHealth <= 0)
                 {
                     stats.IsDead = 1;
-                    if (A.Bridge.DeathEventQueue.Count < RunDefaults.CosmeticQueueCapacity)
-                        A.Bridge.DeathEventQueue.Enqueue(new DeathEvent { Position = run.PlayerPosition, TypeId = SimulationConstants.PlayerTypeId });
+                    if (A.Bridge.DeathEventQueue.Count < SimulationConstants.CosmeticQueueCapacity)
+                        A.Bridge.DeathEventQueue.Enqueue(new DeathEvent { Position = run.PlayerPosition, TypeId = CombatConstants.PlayerTypeId });
                 }
-                else if (A.Bridge.HitReactionEventQueue.Count < RunDefaults.CosmeticQueueCapacity)
+                else if (A.Bridge.HitReactionEventQueue.Count < SimulationConstants.CosmeticQueueCapacity)
                     A.Bridge.HitReactionEventQueue.Enqueue(new PlayerHitReactionEvent { Damage = best.Damage, HitDirection = best.HitDirection });
                 A.Stats[run.Player] = stats; A.Invulnerability[run.Player] = invulnerability;
             }

@@ -12,8 +12,8 @@ namespace GameHolder.PureDots
         public static PureDotsHUD Instance { get; private set; }
         private SimulationSnapshot m_Snapshot;
         private bool m_Bound;
-        private readonly char[] m_Text = new char[512];
-        private readonly SimulationCommand[] m_Pending = new SimulationCommand[64];
+        private readonly char[] m_Text = new char[PresentationConstants.HudTextCapacity];
+        private readonly SimulationCommand[] m_Pending = new SimulationCommand[SimulationConstants.CommandQueueCapacity];
         private BatchedHudText m_Stats, m_God, m_Attack, m_DeathStats;
         private GameObject m_DeathPanel;
         private int m_Length, m_PendingCount, m_Frames;
@@ -24,23 +24,23 @@ namespace GameHolder.PureDots
             Instance = this;
             var root = new GameObject("HUD canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform, false);
-            var canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 100; canvas.pixelPerfect = true;
-            var left = Panel("Stats panel", root.transform, new Vector2(310, 282), new Vector2(10, 10), Vector2.up);
-            m_Stats = Text("Stats", left, new Vector2(286, 270), new Vector2(12, 10), "");
-            var right = Panel("Controls panel", root.transform, new Vector2(235, 315), new Vector2(-245, 10), Vector2.one);
-            Text("Controls title", right, new Vector2(215, 24), new Vector2(10, 10), "RUN CONTROLS");
-            m_God = Button(right, 40, "God mode: OFF", ToggleGod);
-            m_Attack = Button(right, 74, "Auto attack: ON", ToggleAttack);
-            Button(right, 108, "Spawn +100", Spawn100);
-            Button(right, 142, "Spawn +1,000", Spawn1000);
-            Button(right, 176, "Spawn +10,000", Spawn10000);
-            Button(right, 210, "Kill all enemies", KillAll);
-            Button(right, 244, "Teleport / rebase", Rebase);
-            Button(right, 278, "Restart run", RespawnPlayer);
-            var death = Panel("Run ended panel", root.transform, new Vector2(310, 160), new Vector2(-155, -80), new Vector2(.5f, .5f));
+            var canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = HudLayout.SortingOrder; canvas.pixelPerfect = true;
+            var left = Panel("Stats panel", root.transform, HudLayout.StatsPanelSize, HudLayout.StatsPanelPosition, Vector2.up);
+            m_Stats = Text("Stats", left, HudLayout.StatsTextSize, HudLayout.StatsTextPosition, "");
+            var right = Panel("Controls panel", root.transform, HudLayout.ControlsPanelSize, HudLayout.ControlsPanelPosition, Vector2.one);
+            Text("Controls title", right, HudLayout.ControlsTitleSize, HudLayout.ControlsTitlePosition, "RUN CONTROLS");
+            m_God = Button(right, HudLayout.FirstControlY, "God mode: OFF", ToggleGod);
+            m_Attack = Button(right, HudLayout.FirstControlY + 1 * HudLayout.ControlSpacing, "Auto attack: ON", ToggleAttack);
+            Button(right, HudLayout.FirstControlY + 2 * HudLayout.ControlSpacing, "Spawn +100", Spawn100);
+            Button(right, HudLayout.FirstControlY + 3 * HudLayout.ControlSpacing, "Spawn +1,000", Spawn1000);
+            Button(right, HudLayout.FirstControlY + 4 * HudLayout.ControlSpacing, "Spawn +10,000", Spawn10000);
+            Button(right, HudLayout.FirstControlY + 5 * HudLayout.ControlSpacing, "Kill all enemies", KillAll);
+            Button(right, HudLayout.FirstControlY + 6 * HudLayout.ControlSpacing, "Teleport / rebase", Rebase);
+            Button(right, HudLayout.FirstControlY + 7 * HudLayout.ControlSpacing, "Restart run", RespawnPlayer);
+            var death = Panel("Run ended panel", root.transform, HudLayout.DeathPanelSize, HudLayout.DeathPanelPosition, new Vector2(.5f, .5f));
             m_DeathPanel = death.gameObject;
-            m_DeathStats = Text("Run ended stats", death, new Vector2(270, 90), new Vector2(20, 10), "RUN ENDED");
-            Button(death, 106, "Restart run", RespawnPlayer);
+            m_DeathStats = Text("Run ended stats", death, HudLayout.DeathTextSize, HudLayout.DeathTextPosition, "RUN ENDED");
+            Button(death, HudLayout.DeathRestartY, "Restart run", RespawnPlayer);
             if (EventSystem.current == null)
             {
                 var events = new GameObject("HUD event system", typeof(EventSystem), typeof(InputSystemUIInputModule));
@@ -64,7 +64,7 @@ namespace GameHolder.PureDots
         private static RectTransform Panel(string name, Transform parent, Vector2 size, Vector2 position, Vector2 anchor)
         {
             var rect = Rect(name, parent, size, position, anchor);
-            var image = rect.gameObject.AddComponent<Image>(); image.color = new Color(.04f, .05f, .08f, .92f); image.raycastTarget = false;
+            var image = rect.gameObject.AddComponent<Image>(); image.color = HudLayout.PanelColor; image.raycastTarget = false;
             return rect;
         }
         private static BatchedHudText Text(string name, Transform parent, Vector2 size, Vector2 position, string text)
@@ -74,17 +74,17 @@ namespace GameHolder.PureDots
         }
         private static BatchedHudText Button(Transform parent, float y, string text, UnityAction action)
         {
-            var rect = Rect(text, parent, new Vector2(215, 28), new Vector2(10, y), Vector2.up);
-            var image = rect.gameObject.AddComponent<Image>(); image.color = new Color(.16f, .2f, .28f);
+            var rect = Rect(text, parent, HudLayout.ButtonSize, new Vector2(HudLayout.ButtonX, y), Vector2.up);
+            var image = rect.gameObject.AddComponent<Image>(); image.color = HudLayout.ButtonColor;
             var button = rect.gameObject.AddComponent<UnityEngine.UI.Button>(); button.targetGraphic = image;
             button.navigation = new Navigation { mode = Navigation.Mode.None }; button.onClick.AddListener(action);
-            return Text("Label", rect, new Vector2(199, 26), new Vector2(8, 1), text);
+            return Text("Label", rect, HudLayout.ButtonTextSize, HudLayout.ButtonTextPosition, text);
         }
         public void ApplySnapshot(SimulationSnapshot snapshot, UnsafeQueue<SimulationCommand> commands)
         {
             m_Snapshot = snapshot; m_Bound = true;
             // The bridge calls this after its simulation fence, so UI input never races native jobs.
-            for (int i = 0; i < m_PendingCount; i++) if (commands.IsCreated && commands.Count < 64) commands.Enqueue(m_Pending[i]);
+            for (int i = 0; i < m_PendingCount; i++) if (commands.IsCreated && commands.Count < SimulationConstants.CommandQueueCapacity) commands.Enqueue(m_Pending[i]);
             m_PendingCount = 0;
             RefreshText();
         }
@@ -105,7 +105,7 @@ namespace GameHolder.PureDots
         private void Update()
         {
             m_Elapsed += Time.unscaledDeltaTime; m_Frames++;
-            if (m_Elapsed < .5f) return;
+            if (m_Elapsed < PresentationConstants.FpsSampleInterval) return;
             m_Fps = m_Frames / m_Elapsed; m_Milliseconds = m_Elapsed * 1000 / m_Frames;
             m_Elapsed = 0; m_Frames = 0;
         }

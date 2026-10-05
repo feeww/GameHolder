@@ -12,7 +12,7 @@ namespace GameHolder.PureDots
             if (c <= 0) return true;
             float2 delta = end - start;
             float a = math.lengthsq(delta);
-            if (a < 1e-12f) return false;
+            if (a < NumericalConstants.MinimumSweepLengthSq) return false;
             float b = math.dot(start, delta);
             float discriminant = b * b - a * c;
             if (b >= 0 || discriminant < 0) return false;

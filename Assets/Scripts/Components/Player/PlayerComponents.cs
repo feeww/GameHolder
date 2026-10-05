@@ -21,6 +21,7 @@ namespace GameHolder.PureDots
     public struct PlayerStats : IComponentData
     {
         public float MoveSpeed;
+        public float CollisionRadius;
         public float MagnetRadius;
         public float CurrentHealth;
         public float MaxHealth;

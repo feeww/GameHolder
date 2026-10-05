@@ -12,8 +12,12 @@ namespace GameHolder.PureDots
         public float Mass;
         public float AttackRange;
         public float BaseDamage;
+        public float ContactAttackInterval;
         public uint ExperienceValue;
-        public float SpeedVariation;
+        public float SpawnThreshold;
+        public float RetreatRange;
+        public PlayerWeapon Weapon;
+        public float4 Tint;
     }
 
     public struct EnemyConfigCatalog

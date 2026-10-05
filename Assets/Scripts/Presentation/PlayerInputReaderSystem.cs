@@ -30,7 +30,7 @@ namespace GameHolder.PureDots
             if (gamepad != null)
             {
                 Vector2 stick = gamepad.leftStick.ReadValue();
-                if (stick.sqrMagnitude > 0.04f)
+                if (stick.sqrMagnitude > PresentationConstants.GamepadDeadZoneSq)
                 {
                     input = new float2(stick.x, stick.y);
                 }

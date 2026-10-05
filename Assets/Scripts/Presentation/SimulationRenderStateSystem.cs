@@ -12,18 +12,17 @@ namespace GameHolder.PureDots
     [UpdateBefore(typeof(EntitiesGraphicsSystem))]
     public partial class SimulationRenderStateSystem : SystemBase
     {
-        private ComponentLookup<EnemyProjectileTag> m_EnemyProjectiles;
         protected override void OnCreate()
         {
             RequireForUpdate<SimulationSnapshot>();
-            m_EnemyProjectiles = GetComponentLookup<EnemyProjectileTag>(true);
         }
         protected override void OnUpdate()
         {
             var snapshot = SystemAPI.GetSingleton<SimulationSnapshot>();
-            Dependency = new EnemyRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
-            m_EnemyProjectiles.Update(this);
-            Dependency = new ProjectileRenderJob { CameraY = snapshot.PlayerPosition.y, EnemyProjectiles = m_EnemyProjectiles }.ScheduleParallel(Dependency);
+            Dependency = new EnemyRenderJob { CameraY = snapshot.PlayerPosition.y,
+                Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog }.ScheduleParallel(Dependency);
+            Dependency = new ProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
+            Dependency = new WeaponProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
             Dependency = new GemRenderJob { CameraY = snapshot.PlayerPosition.y, Dt = SystemAPI.Time.DeltaTime,
                 Generation = snapshot.Generation }.ScheduleParallel(Dependency);
             Dependency = new PlayerRenderJob { CameraY = snapshot.PlayerPosition.y }.Schedule(Dependency);
@@ -34,6 +33,7 @@ namespace GameHolder.PureDots
     public partial struct EnemyRenderJob : IJobEntity
     {
         public float CameraY;
+        public BlobAssetReference<EnemyConfigCatalog> Catalog;
         public void Execute(in LocalTransform transform, in MovementVelocity velocity, in TypeId type,
             EnabledRefRO<EnemyActiveTag> active, EnabledRefRW<MaterialMeshInfo> visible,
             ref MaterialMeshInfo mesh, ref LocalToWorld world, ref SpriteUVOffset uv, ref BaseColorOverride color)
@@ -41,7 +41,7 @@ namespace GameHolder.PureDots
             visible.ValueRW = active.ValueRO;
             if (!active.ValueRO) return;
             mesh = MaterialMeshInfo.FromRenderMeshArrayIndices((int)type.Value, 0);
-            uv.Value = new float4(1, 1, 0, 0); color.Value = new float4(1);
+            uv.Value = new float4(1, 1, 0, 0); color.Value = Catalog.Value.Configs[(int)type.Value].Tint;
             float3 position = transform.Position;
             position.z = PresentationDepth.Calculate(position.y, CameraY, math.length(velocity.Value));
             world.Value = float4x4.TRS(position, transform.Rotation, new float3(transform.Scale));
@@ -52,18 +52,44 @@ namespace GameHolder.PureDots
     public partial struct ProjectileRenderJob : IJobEntity
     {
         public float CameraY;
-        [ReadOnly] public ComponentLookup<EnemyProjectileTag> EnemyProjectiles;
-        public void Execute(Entity entity, in LocalTransform transform, in MovementVelocity velocity, in ProjectileData data,
+        public void Execute(in LocalTransform transform, in MovementVelocity velocity, in ProjectileData data,
             EnabledRefRO<ProjectileActiveTag> active, EnabledRefRW<MaterialMeshInfo> visible, ref LocalToWorld world, ref BaseColorOverride color)
         {
             visible.ValueRW = active.ValueRO;
             if (!active.ValueRO) return;
-            color.Value = EnemyProjectiles.HasComponent(entity)
-                ? (data.Damage == SimulationConstants.RangedSniperProjectileDamage ? new float4(1, .45f, .1f, 1) : new float4(.9f, .3f, 1, 1))
-                : new float4(.2f, .9f, 1, 1);
+            color.Value = data.Color;
             float3 position = transform.Position;
             position.z = PresentationDepth.Calculate(position.y, CameraY, math.length(velocity.Value));
-            world.Value = float4x4.TRS(position, transform.Rotation, new float3(transform.Scale));
+            position.y -= data.Radius;
+            world.Value = float4x4.TRS(position, transform.Rotation, new float3(data.Radius * 2, data.Radius * 2, 1));
+        }
+    }
+    [BurstCompile]
+    [WithOptions(EntityQueryOptions.IgnoreComponentEnabledState)]
+    public partial struct WeaponProjectileRenderJob : IJobEntity
+    {
+        public float CameraY;
+        public void Execute(in LocalTransform transform, in ProjectileData data, in ExplosiveProjectile explosive, in LaserBeam beam,
+            EnabledRefRO<ExplosiveProjectile> isExplosive, EnabledRefRO<LaserBeam> isLaser,
+            EnabledRefRO<ProjectileActiveTag> active, ref MaterialMeshInfo mesh, ref LocalToWorld world, ref BaseColorOverride color)
+        {
+            if (!active.ValueRO) return;
+            mesh = MaterialMeshInfo.FromRenderMeshArrayIndices(isLaser.ValueRO ? 1 : 0, 0);
+            if (!isExplosive.ValueRO && !isLaser.ValueRO) return;
+            float3 position = transform.Position;
+            position.z = PresentationDepth.Calculate(position.y, CameraY);
+            if (isLaser.ValueRO)
+            {
+                color.Value = data.Color;
+                world.Value = float4x4.TRS(position, quaternion.RotateZ(math.atan2(beam.Direction.y, beam.Direction.x) - math.PI * .5f),
+                    new float3(data.Radius * 2, beam.Length, 1));
+                return;
+            }
+            float radius = explosive.Detonated != 0 ? explosive.BlastRadius : data.Radius;
+            position.y -= radius;
+            color.Value = data.Color;
+            if (explosive.Detonated != 0) color.Value.w *= PresentationConstants.BlastAlphaScale;
+            world.Value = float4x4.TRS(position, quaternion.identity, new float3(radius * 2, radius * 2, 1));
         }
     }
     [BurstCompile]
@@ -79,13 +105,13 @@ namespace GameHolder.PureDots
             visible.ValueRW = active.ValueRO;
             if (visual.Generation != Generation) visual = new GemVisualState { Generation = Generation };
             if (!active.ValueRO) { visual.WasActive = 0; visual.FlashTimer = 0; return; }
-            if (visual.WasActive != 0 && visual.Experience < gem.ExperienceValue) visual.FlashTimer = .18f;
+            if (visual.WasActive != 0 && visual.Experience < gem.ExperienceValue) visual.FlashTimer = PresentationConstants.GemFlashDuration;
             visual.Experience = gem.ExperienceValue; visual.WasActive = 1;
             visual.FlashTimer = math.max(0, visual.FlashTimer - Dt);
             uv.Value = PresentationDepth.TierUV(gem.Tier);
-            color.Value = math.lerp(PresentationDepth.TierColor(gem.Tier), new float4(2, 2, 2, 1), math.saturate(visual.FlashTimer / .18f));
+            color.Value = math.lerp(PresentationDepth.TierColor(gem.Tier), PresentationConstants.GemFlashColor, math.saturate(visual.FlashTimer / PresentationConstants.GemFlashDuration));
             float3 position = transform.Position;
-            position.z = PresentationDepth.Calculate(position.y, CameraY) + SimulationConstants.GemZOffset;
+            position.z = PresentationDepth.Calculate(position.y, CameraY) + PresentationConstants.GemZOffset;
             world.Value = float4x4.TRS(position, transform.Rotation, new float3(transform.Scale));
         }
     }

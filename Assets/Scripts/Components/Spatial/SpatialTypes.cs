@@ -24,8 +24,8 @@ namespace GameHolder.PureDots
 
     public static class SpatialHashUtils
     {
-        public const float CellSize = SimulationConstants.SpatialCellSize;
-        public const float InvCellSize = SimulationConstants.SpatialInvCellSize;
+        public const float CellSize = CrowdConstants.SpatialCellSize;
+        public const float InvCellSize = CrowdConstants.SpatialInvCellSize;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int2 QuantizeToCell(float2 position)
@@ -42,13 +42,13 @@ namespace GameHolder.PureDots
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ComputeHash(int2 cell)
         {
-            return unchecked(((uint)cell.x * SimulationConstants.HashPrimeX) ^ ((uint)cell.y * SimulationConstants.HashPrimeY));
+            return unchecked(((uint)cell.x * CrowdConstants.HashPrimeX) ^ ((uint)cell.y * CrowdConstants.HashPrimeY));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint ComputeHash(int cx, int cy)
         {
-            return unchecked(((uint)cx * SimulationConstants.HashPrimeX) ^ ((uint)cy * SimulationConstants.HashPrimeY));
+            return unchecked(((uint)cx * CrowdConstants.HashPrimeX) ^ ((uint)cy * CrowdConstants.HashPrimeY));
         }
     }
 

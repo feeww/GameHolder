@@ -22,7 +22,7 @@ namespace GameHolder.PureDots
                 else
                 {
                     int furthest = -1, nearest = -1;
-                    float maximum = SimulationConstants.OffScreenGemRecycleDistanceSq, minimum = float.MaxValue;
+                    float maximum = ProgressionConstants.OffScreenGemRecycleDistanceSq, minimum = float.MaxValue;
                     for (int i = 0; i < A.GemPool.AllGems.Length; i++)
                     {
                         var candidate = A.GemPool.AllGems[i];
@@ -55,23 +55,23 @@ namespace GameHolder.PureDots
                     var record = A.GemPool.AllGems[i];
                     if (record.IsActive == 0 || math.distancesq(record.Position, run.PlayerPosition) > stats.MagnetRadius * stats.MagnetRadius) continue;
                     gained += record.ExperienceValue;
-                    if (A.Bridge.GemCollectEventQueue.Count < RunDefaults.CosmeticQueueCapacity)
+                    if (A.Bridge.GemCollectEventQueue.Count < SimulationConstants.CosmeticQueueCapacity)
                         A.Bridge.GemCollectEventQueue.Enqueue(new GemCollectEvent { Position = record.Position, ExperienceValue = record.ExperienceValue });
                     record.IsActive = 0; A.GemPool.AllGems[i] = record;
                     A.Gems.SetComponentEnabled(record.Entity, false); A.GemPool.FreeGems.Enqueue(record.Entity); run.ActiveGems--;
                 }
                 run.TotalExperience += gained; stats.Experience += gained;
-                uint required = stats.Level * SimulationConstants.ExpPerLevelMultiplier;
+                uint required = stats.Level * ProgressionConstants.ExpPerLevelMultiplier;
                 while (required > 0 && stats.Experience >= required)
                 {
-                    stats.Experience -= required; stats.Level++; stats.MaxHealth += SimulationConstants.HealthBonusPerLevel;
-                    stats.CurrentHealth = math.min(stats.MaxHealth, stats.CurrentHealth + SimulationConstants.HealthHealPerLevel);
-                    required = stats.Level * SimulationConstants.ExpPerLevelMultiplier;
+                    stats.Experience -= required; stats.Level++; stats.MaxHealth += ProgressionConstants.HealthBonusPerLevel;
+                    stats.CurrentHealth = math.min(stats.MaxHealth, stats.CurrentHealth + ProgressionConstants.HealthHealPerLevel);
+                    required = stats.Level * ProgressionConstants.ExpPerLevelMultiplier;
                 }
                 A.Stats[run.Player] = stats;
             }
             A.Run[A.State] = run;
         }
-        public static uint ComputeTier(uint experience) => experience >= 16 ? 3u : experience >= 8 ? 2u : experience >= 4 ? 1u : 0u;
+        public static uint ComputeTier(uint experience) => experience >= ProgressionConstants.GemTier3Experience ? 3u : experience >= ProgressionConstants.GemTier2Experience ? 2u : experience >= ProgressionConstants.GemTier1Experience ? 1u : 0u;
     }
 }

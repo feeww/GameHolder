@@ -28,10 +28,10 @@ namespace GameHolder.PureDots.Editor
             }
 
             cam.orthographic = true;
-            cam.orthographicSize = 10.0f;
-            cam.nearClipPlane = -20.0f;
-            cam.farClipPlane = 20.0f;
-            cam.transform.position = new Vector3(0, 0, -10);
+            cam.orthographicSize = PresentationConstants.CameraOrthographicSize;
+            cam.nearClipPlane = PresentationConstants.CameraNearClip;
+            cam.farClipPlane = PresentationConstants.CameraFarClip;
+            cam.transform.position = new Vector3(0, 0, PresentationConstants.CameraZPosition);
 
             EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
             Debug.Log("[PureDOTS] Scene successfully configured with PureDots Presentation Bootstrap and Camera!");

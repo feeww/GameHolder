@@ -26,6 +26,9 @@ namespace GameHolder.PureDots
         public ComponentLookup<EnemyMeleeCooldown> MeleeCooldown;
         public ComponentLookup<ProjectileActiveTag> Projectiles;
         public ComponentLookup<ProjectileData> ProjectileData;
+        public ComponentLookup<ExplosiveProjectile> Explosives;
+        public ComponentLookup<LaserBeam> Lasers;
+        public ComponentLookup<PlayerWeapon> Weapons;
         [ReadOnly] public ComponentLookup<PlayerProjectileTag> PlayerProjectiles;
         public ComponentLookup<GemData> GemData;
         public ComponentLookup<GemActiveTag> Gems;
@@ -46,6 +49,7 @@ namespace GameHolder.PureDots
         public UnsafeQueue<SimulationCommand> Commands;
         public SimulationBridgeQueuesSingleton Bridge;
         public BlobAssetReference<EnemyConfigCatalog> Catalog;
+        public StartingPlayerConfig StartingPlayer;
 
         public void Initialize(ref SystemState state)
         {
@@ -64,6 +68,9 @@ namespace GameHolder.PureDots
             MeleeCooldown = state.GetComponentLookup<EnemyMeleeCooldown>();
             Projectiles = state.GetComponentLookup<ProjectileActiveTag>();
             ProjectileData = state.GetComponentLookup<ProjectileData>();
+            Explosives = state.GetComponentLookup<ExplosiveProjectile>();
+            Lasers = state.GetComponentLookup<LaserBeam>();
+            Weapons = state.GetComponentLookup<PlayerWeapon>();
             PlayerProjectiles = state.GetComponentLookup<PlayerProjectileTag>(true);
             GemData = state.GetComponentLookup<GemData>();
             Gems = state.GetComponentLookup<GemActiveTag>();
@@ -88,6 +95,9 @@ namespace GameHolder.PureDots
             MeleeCooldown.Update(ref state);
             Projectiles.Update(ref state);
             ProjectileData.Update(ref state);
+            Explosives.Update(ref state);
+            Lasers.Update(ref state);
+            Weapons.Update(ref state);
             PlayerProjectiles.Update(ref state);
             GemData.Update(ref state);
             Gems.Update(ref state);
@@ -104,6 +114,7 @@ namespace GameHolder.PureDots
         private SimulationAccess m_Access;
         private NativeList<DamageEvent> m_Damage;
         private NativeList<Entity> m_Deactivations;
+        private NativeParallelHashMap<Entity, float> m_AreaDamage;
         private bool m_Bound;
         private ComponentLookup<SimulationRunState> m_ReadRun;
         private ComponentLookup<EnemyActiveTag> m_ReadEnemies;
@@ -116,8 +127,9 @@ namespace GameHolder.PureDots
             m_ReadRun = state.GetComponentLookup<SimulationRunState>(true);
             m_ReadEnemies = state.GetComponentLookup<EnemyActiveTag>(true);
             m_ReadTypes = state.GetComponentLookup<TypeId>(true);
-            m_Damage = new NativeList<DamageEvent>(SimulationConstants.MaxProjectiles + SimulationConstants.MaxEnemies, Allocator.Persistent);
-            m_Deactivations = new NativeList<Entity>(SimulationConstants.MaxProjectiles * 4, Allocator.Persistent);
+            m_Damage = new NativeList<DamageEvent>(SimulationConstants.DamageBufferCapacity, Allocator.Persistent);
+            m_Deactivations = new NativeList<Entity>(SimulationConstants.DeactivationBufferCapacity, Allocator.Persistent);
+            m_AreaDamage = new NativeParallelHashMap<Entity, float>(SimulationConstants.MaxEnemies, Allocator.Persistent);
         }
 
         [BurstCompile]
@@ -141,6 +153,7 @@ namespace GameHolder.PureDots
                 m_Access.Commands = SystemAPI.GetSingleton<SimulationCommandQueue>().Commands;
                 m_Access.Bridge = SystemAPI.GetSingleton<SimulationBridgeQueuesSingleton>();
                 m_Access.Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
+                m_Access.StartingPlayer = SystemAPI.GetSingleton<StartingPlayerConfig>();
                 m_Bound = true;
             }
             m_Access.Update(ref state);
@@ -157,7 +170,7 @@ namespace GameHolder.PureDots
                 Cooldown = m_Access.MeleeCooldown, Active = m_ReadEnemies,
                 Types = m_ReadTypes, Run = m_ReadRun,
                 State = m_Access.State, Catalog = m_Access.Catalog, Dt = dt
-            }.Schedule(m_Access.EnemyPool.AllEnemies.Length, 128, chain);
+            }.Schedule(m_Access.EnemyPool.AllEnemies.Length, SimulationConstants.JobBatchSize, chain);
             chain = new MoveProjectilesJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new RebuildSpatialGridJob { A = m_Access }.Schedule(chain);
             chain = new CrowdContactJob
@@ -166,14 +179,18 @@ namespace GameHolder.PureDots
                 Transforms = m_Access.Transforms, Velocities = m_Access.Velocities, Previous = m_Access.Previous,
                 Types = m_ReadTypes, Catalog = m_Access.Catalog, Cache = m_Access.Separation, Dt = dt,
                 Run = m_ReadRun, State = m_Access.State, Grid = m_Access.Grid, Cells = m_Access.CrowdCells
-            }.Schedule(m_Access.EnemyPool.AllEnemies.Length, 128, chain);
+            }.Schedule(m_Access.EnemyPool.AllEnemies.Length, SimulationConstants.JobBatchSize, chain);
             // Combat must see resolved contacts and include their displacement in relative projectile sweeps.
             chain = new RebuildSpatialGridJob { A = m_Access }.Schedule(chain);
             chain = new PlayerHitCheckJob { A = m_Access }.Schedule(chain);
             chain = new ProjectileBroadphaseJob { A = m_Access }.Schedule(chain);
-            chain = new DamageResolutionJob { A = m_Access, Damage = m_Damage, Deactivations = m_Deactivations }.Schedule(chain);
+            chain = new ExplosiveCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
+            chain = new LaserCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
+            chain = new DamageResolutionJob { A = m_Access, Damage = m_Damage, Deactivations = m_Deactivations, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new GemLifecycleJob { A = m_Access }.Schedule(chain);
             chain = new PlayerAutoAttackJob { A = m_Access, Dt = dt }.Schedule(chain);
+            chain = new ExplosiveAttackJob { A = m_Access }.Schedule(chain);
+            chain = new LaserAttackJob { A = m_Access }.Schedule(chain);
             chain = new EnemyRangedAttackJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new PublishSimulationSnapshotJob { A = m_Access }.Schedule(chain);
             state.Dependency = chain;
@@ -185,6 +202,7 @@ namespace GameHolder.PureDots
             state.Dependency.Complete();
             m_Damage.Dispose();
             m_Deactivations.Dispose();
+            m_AreaDamage.Dispose();
         }
     }
 }

@@ -10,10 +10,25 @@ namespace GameHolder.PureDots
         public float Damage;
         public float Radius;
         public float RemainingLifetime;
+        public float4 Color;
+        public float ActiveStepFraction; // Fraction of the current simulation tick before expiry.
     }
 
     public struct ProjectileActiveTag : IComponentData, IEnableableComponent
     {
+    }
+
+    public struct ExplosiveProjectile : IComponentData, IEnableableComponent
+    {
+        public float BlastRadius;
+        public byte Detonated;
+    }
+
+    public struct LaserBeam : IComponentData, IEnableableComponent
+    {
+        public float2 Direction;
+        public float Length;
+        public byte PendingHit;
     }
 
     public struct PlayerProjectileTag : IComponentData

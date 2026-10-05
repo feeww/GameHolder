@@ -8,11 +8,11 @@ namespace GameHolder.PureDots
         public static AudioThrottlingManager Instance { get; private set; }
 
         [SerializeField] private AudioSource m_AudioSourcePrefab;
-        [SerializeField] private int m_AudioSourcePoolSize = 16;
-        [SerializeField] private int m_MaxConcurrentPerSound = 3;
+        [SerializeField] private int m_AudioSourcePoolSize = PresentationConstants.AudioSourcePoolSize;
+        [SerializeField] private int m_MaxConcurrentPerSound = PresentationConstants.MaxSoundsPerClipPerFrame;
 
-        private readonly Dictionary<AudioClip, int> m_FrameCounts = new Dictionary<AudioClip, int>(3);
-        private readonly List<AudioSource> m_AudioSources = new List<AudioSource>(16);
+        private readonly Dictionary<AudioClip, int> m_FrameCounts = new Dictionary<AudioClip, int>(PresentationConstants.SoundClipCount);
+        private readonly List<AudioSource> m_AudioSources = new List<AudioSource>(PresentationConstants.AudioSourcePoolSize);
         private int m_CurrentSourceIndex;
 
         private void Awake()
@@ -58,7 +58,7 @@ namespace GameHolder.PureDots
             m_CurrentSourceIndex = (m_CurrentSourceIndex + 1) % m_AudioSources.Count;
 
             // Pitch variation +/- 10%
-            source.pitch = 1.0f + Random.Range(-0.1f, 0.1f);
+            source.pitch = 1.0f + Random.Range(-PresentationConstants.AudioPitchVariation, PresentationConstants.AudioPitchVariation);
             source.PlayOneShot(clip, volume);
         }
     }

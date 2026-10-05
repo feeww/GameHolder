@@ -7,7 +7,7 @@ namespace GameHolder.PureDots
         public static CameraPresentationController Instance { get; private set; }
 
         [SerializeField] private Camera m_TargetCamera;
-        [SerializeField] private float m_SmoothSpeed = 15.0f;
+        [SerializeField] private float m_SmoothSpeed = PresentationConstants.CameraSmoothSpeed;
 
         private void Awake()
         {

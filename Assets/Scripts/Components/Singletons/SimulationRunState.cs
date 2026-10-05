@@ -18,11 +18,12 @@ namespace GameHolder.PureDots
     {
         public Entity Player;
         public float2 PlayerPosition, PreviousPlayerPosition, PlayerVelocity, RebaseDelta;
+        public float2 Aim;
         public double2 WorldOrigin;
         public uint Tick, Generation, Kills, TotalExperience, AngleCounter;
         public int ExtraSpawns, ActiveEnemies, PlayerProjectiles, EnemyProjectiles, ActiveGems;
-        public float AttackTimer, MaxEnemyStep, MaxEnemyRadius;
-        public byte GodMode, AutoAttack, ForceRebase;
+        public float AttackTimer, MaxEnemyStep, MaxEnemyRadius, PlayerCollisionRadius;
+        public byte GodMode, AutoAttack, ForceRebase, WeaponReady;
     }
     public struct SimulationSnapshot : IComponentData
     {
@@ -32,20 +33,5 @@ namespace GameHolder.PureDots
         public uint Generation, Kills, TotalExperience;
         public int ActiveEnemies, PlayerProjectiles, EnemyProjectiles, ActiveGems;
         public byte GodMode, AutoAttack;
-    }
-    public static class RunDefaults
-    {
-        public static PlayerStats Player => new PlayerStats
-        {
-            MoveSpeed = SimulationConstants.PlayerDefaultMoveSpeed,
-            MagnetRadius = SimulationConstants.PlayerDefaultMagnetRadius,
-            CurrentHealth = SimulationConstants.PlayerDefaultMaxHealth,
-            MaxHealth = SimulationConstants.PlayerDefaultMaxHealth, Level = 1
-        };
-        public static WaveSpawnerConfig Wave => new WaveSpawnerConfig
-        {
-            SpawnInterval = .5f, BatchSize = 35, MinRadius = 18, MaxRadius = 40, RandomSeed = 777123u
-        };
-        public const int CosmeticQueueCapacity = 128;
     }
 }

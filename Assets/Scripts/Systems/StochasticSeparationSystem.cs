@@ -11,13 +11,15 @@ namespace GameHolder.PureDots
     public static class CrowdContact
     {
         public static float PushPriority(EnemyConfigData config) =>
-            math.max(.01f, config.Mass * config.MoveSpeed);
+            math.max(CrowdConstants.MinimumPushPriority, config.Mass * config.MoveSpeed);
 
         public static float2 OverlapDirection(Entity self, Entity other, float2 difference, float distance)
         {
-            if (distance > 1e-5f) return difference / distance;
+            if (distance > CrowdConstants.OverlapDirectionDistance) return difference / distance;
             uint hash = math.hash(new uint2((uint)math.min(self.Index, other.Index), (uint)math.max(self.Index, other.Index)));
-            float angle = (hash & 65535u) * (2 * math.PI / 65536);
+            const uint directionMask = ushort.MaxValue;
+            const int directionBuckets = ushort.MaxValue + 1;
+            float angle = (hash & directionMask) * (2 * math.PI / directionBuckets);
             math.sincos(angle, out float sin, out float cos);
             return new float2(cos, sin) * (self.Index < other.Index ? 1 : -1);
         }
@@ -44,7 +46,7 @@ namespace GameHolder.PureDots
                 gradient += new float2(DensityAt(cells, node + new int2(1, 0)) - DensityAt(cells, node - new int2(1, 0)),
                     DensityAt(cells, node + new int2(0, 1)) - DensityAt(cells, node - new int2(0, 1))) * (weight * .5f * SpatialHashUtils.InvCellSize);
             }
-            averagePriority = prioritySum / math.max(density, 1e-6f);
+            averagePriority = prioritySum / math.max(density, NumericalConstants.MinimumDivisor);
             return density;
         }
 
@@ -77,18 +79,18 @@ namespace GameHolder.PureDots
             var run = Run[State];
             var transform = Transforms[e];
             float2 position = transform.Position.xy;
-            if (math.distancesq(position, run.PlayerPosition) > SimulationConstants.Tier1RadiusSq)
+            if (math.distancesq(position, run.PlayerPosition) > CrowdConstants.Tier1RadiusSq)
             { Cache[e] = default; return; }
             var config = Catalog.Value.Configs[(int)Types[e].Value];
             float priority = CrowdContact.PushPriority(config);
-            float clearance = SimulationConstants.PlayerCollisionRadius + config.CollisionRadius + SimulationConstants.PlayerContactSkin;
-            float queryRadius = config.CollisionRadius + run.MaxEnemyRadius + SimulationConstants.CrowdSteeringMargin;
+            float clearance = run.PlayerCollisionRadius + config.CollisionRadius + CrowdConstants.PlayerContactSkin;
+            float queryRadius = config.CollisionRadius + run.MaxEnemyRadius + CrowdConstants.CrowdSteeringMargin;
             int2 min = SpatialHashUtils.QuantizeToCell(position - queryRadius), max = SpatialHashUtils.QuantizeToCell(position + queryRadius);
             float2 correction = float2.zero, steering = float2.zero;
             float2 approach = math.normalizesafe(run.PlayerPosition - position);
             float density = CrowdContact.SampleDensity(Cells, position, out float2 gradient, out float averagePriority);
-            float2 flow = -gradient * (SimulationConstants.CrowdPushSpeed / SimulationConstants.CrowdTargetDensity);
-            flow *= math.min(1, SimulationConstants.CrowdPushSpeed / math.max(math.length(flow), 1e-6f));
+            float2 flow = -gradient * (CrowdConstants.CrowdPushSpeed / CrowdConstants.CrowdTargetDensity);
+            flow *= math.min(1, CrowdConstants.CrowdPushSpeed / math.max(math.length(flow), NumericalConstants.MinimumDivisor));
             float2 contactFlow = float2.zero;
             float support = 0, obstruction = 0;
             int contacts = 0, neighbours = 0;
@@ -105,37 +107,37 @@ namespace GameHolder.PureDots
                     if (!math.all(entry.CellCoord == cell)) continue;
                     inspected++;
                     if (entry.Entity != e)
-                        Accumulate(e, entry.Entity, position - entry.Position, (config.CollisionRadius + entry.Radius) * SimulationConstants.CrowdBodyRadiusScale,
+                        Accumulate(e, entry.Entity, position - entry.Position, (config.CollisionRadius + entry.Radius) * CrowdConstants.CrowdBodyRadiusScale,
                             entry.PushPriority, priority, approach, flow, ref correction, ref steering, ref contactFlow,
                             ref support, ref cellObstruction, ref contacts, ref neighbours);
                     // ponytail: sample up to 32 bodies per cell; subdivide dense cells if individual spacing needs more detail.
-                } while (inspected < SimulationConstants.MaxCrowdEntries && Grid.TryGetNextValue(out entry, ref iterator));
+                } while (inspected < CrowdConstants.MaxCrowdEntries && Grid.TryGetNextValue(out entry, ref iterator));
                 obstruction += cellObstruction * crowd.Count / math.max(1, inspected);
             }
             correction /= math.max(1, contacts);
-            float response = 1 - math.exp(-SimulationConstants.CrowdContactResponse * Dt);
+            float response = 1 - math.exp(-CrowdConstants.CrowdContactResponse * Dt);
             correction *= response;
             // Equal priorities retain the existing response; stronger bodies yield less to the local crowd.
             float mobility = averagePriority > 0 ? 2 * averagePriority / (priority + averagePriority) : 1;
-            bool flat = math.lengthsq(gradient) < 1e-10f;
-            float pressure = math.saturate(density / SimulationConstants.CrowdTargetDensity - 1) * support;
+            bool flat = math.lengthsq(gradient) < CrowdConstants.FlatGradientLengthSq;
+            float pressure = math.saturate(density / CrowdConstants.CrowdTargetDensity - 1) * support;
             // Project pressure onto actual contact normals, so remote density cannot push across gaps.
-            flow = flat ? steering * SimulationConstants.CrowdPushSpeed : contactFlow;
-            flow *= math.min(1, SimulationConstants.CrowdPushSpeed / math.max(math.length(flow), 1e-6f));
+            flow = flat ? steering * CrowdConstants.CrowdPushSpeed : contactFlow;
+            flow *= math.min(1, CrowdConstants.CrowdPushSpeed / math.max(math.length(flow), NumericalConstants.MinimumDivisor));
             correction += flow * (pressure * mobility * Dt);
             var cache = Cache[e];
-            float radius = (config.CollisionRadius + run.MaxEnemyRadius) * SimulationConstants.CrowdBodyRadiusScale;
-            float margin = SimulationConstants.CrowdSteeringMargin;
+            float radius = (config.CollisionRadius + run.MaxEnemyRadius) * CrowdConstants.CrowdBodyRadiusScale;
+            float margin = CrowdConstants.CrowdSteeringMargin;
             // Integral of the proximity kernel over the forward half-plane, weighted by approach angle.
             float obstructionArea = radius * (radius + margin) + margin * margin / 3;
-            cache.Density = math.lerp(cache.Density, obstruction / math.max(obstructionArea, 1e-6f), response);
-            if (((uint)index + run.Tick & 3u) == 0)
+            cache.Density = math.lerp(cache.Density, obstruction / math.max(obstructionArea, NumericalConstants.MinimumDivisor), response);
+            if (((uint)index + run.Tick) % CrowdConstants.SteeringUpdateInterval == 0)
             {
                 cache.Direction = math.normalizesafe(steering + flow * pressure);
-                cache.Weight = math.max(math.saturate(neighbours * .25f), pressure);
+                cache.Weight = math.max(math.saturate((float)neighbours / CrowdConstants.NeighborsForFullSteering), pressure);
             }
             Cache[e] = cache;
-            correction *= math.min(1, SimulationConstants.CrowdPushSpeed * mobility * .5f * Dt / math.max(math.length(correction), 1e-6f));
+            correction *= math.min(1, CrowdConstants.CrowdPushSpeed * mobility * CrowdConstants.ContactCorrectionSpeedScale * Dt / math.max(math.length(correction), NumericalConstants.MinimumDivisor));
             position += correction;
 
             // The player owns its position. Only enemies are displaced by player contact.
@@ -149,7 +151,7 @@ namespace GameHolder.PureDots
             }
             transform.Position = new float3(position, 0);
             Transforms[e] = transform;
-            Velocities[e] = new MovementVelocity { Value = (position - Previous[e].Value) / math.max(Dt, 1e-6f) };
+            Velocities[e] = new MovementVelocity { Value = (position - Previous[e].Value) / math.max(Dt, NumericalConstants.MinimumDivisor) };
         }
 
         private static void Accumulate(Entity self, Entity other, float2 difference, float radius,
@@ -157,17 +159,17 @@ namespace GameHolder.PureDots
             ref float support, ref float obstruction, ref int contacts, ref int neighbours)
         {
             float distance = math.length(difference);
-            float queryRadius = radius + SimulationConstants.CrowdSteeringMargin;
+            float queryRadius = radius + CrowdConstants.CrowdSteeringMargin;
             if (distance >= queryRadius) return;
             float2 away = CrowdContact.OverlapDirection(self, other, difference, distance);
-            float proximity = math.saturate((queryRadius - distance) / SimulationConstants.CrowdSteeringMargin);
+            float proximity = math.saturate((queryRadius - distance) / CrowdConstants.CrowdSteeringMargin);
             support = math.max(support, proximity);
             obstruction += proximity * math.max(0, -math.dot(away, approach)) * (otherPriority / priority);
             float share = otherPriority / (priority + otherPriority);
             contactFlow += away * (math.max(0, math.dot(away, flow)) * proximity * share);
             steering += away * (share * (1 - distance / queryRadius));
             neighbours++;
-            float penetration = radius - distance - SimulationConstants.CrowdContactDeadZone;
+            float penetration = radius - distance - CrowdConstants.CrowdContactDeadZone;
             if (penetration <= 0) return;
             correction += away * (penetration * share);
             contacts++;

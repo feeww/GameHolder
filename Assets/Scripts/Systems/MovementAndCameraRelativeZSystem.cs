@@ -39,32 +39,29 @@ namespace GameHolder.PureDots
             float baseSpeed = config.MoveSpeed;
             var separation = Separation[e];
             float speed = baseSpeed;
-            if (distanceSq > SimulationConstants.Tier1RadiusSq)
+            if (distanceSq > CrowdConstants.Tier1RadiusSq)
             {
                 separation = default;
-                float t = math.saturate((distanceSq - SimulationConstants.Tier1RadiusSq) /
-                    (SimulationConstants.Tier2MaxRadiusSq - SimulationConstants.Tier1RadiusSq));
-                speed *= math.lerp(1, SimulationConstants.MaxCatchUpMultiplier, t);
+                float t = math.saturate((distanceSq - CrowdConstants.Tier1RadiusSq) /
+                    (CrowdConstants.Tier2MaxRadiusSq - CrowdConstants.Tier1RadiusSq));
+                speed *= math.lerp(1, CrowdConstants.MaxCatchUpMultiplier, t);
             }
-            else
+            if (config.RetreatRange > 0 && distanceSq < config.RetreatRange * config.RetreatRange)
             {
-                if (type == SimulationConstants.EnemyRangedSkirmisherTypeId && distanceSq < SimulationConstants.RangedSkirmisherRetreatRangeSq)
-                {
-                    direction = -direction;
-                    speed = math.min(speed, (SimulationConstants.RangedSkirmisherRetreatRange - distance) / math.max(Dt, 1e-6f));
-                }
-                else speed = math.min(speed, math.max(0, distance - config.AttackRange) / math.max(Dt, 1e-6f));
-                speed *= math.min(1, SimulationConstants.CrowdTargetDensity / math.max(SimulationConstants.CrowdTargetDensity, separation.Density));
+                direction = -direction;
+                speed = math.min(speed, (config.RetreatRange - distance) / math.max(Dt, NumericalConstants.MinimumDivisor));
             }
+            else speed = math.min(speed, math.max(0, distance - config.AttackRange) / math.max(Dt, NumericalConstants.MinimumDivisor));
+            speed *= math.min(1, CrowdConstants.CrowdTargetDensity / math.max(CrowdConstants.CrowdTargetDensity, separation.Density));
             // Blocked approaches split around the player instead of continually driving into the centre.
             float2 tangent = new float2(-direction.y, direction.x);
             float side = math.dot(separation.Direction, tangent);
-            if (math.abs(side) < .5f) side = (index & 1) == 0 ? 1 : -1;
-            float routing = math.smoothstep(0, SimulationConstants.CrowdPackingRange, math.max(0, distance - config.AttackRange));
-            routing *= SimulationConstants.CrowdTargetDensity / (SimulationConstants.CrowdTargetDensity + separation.Density);
-            float2 velocity = direction * speed + tangent * (side * baseSpeed * separation.Weight * .65f * routing);
+            if (math.abs(side) < CrowdConstants.SideSelectionThreshold) side = (index & 1) == 0 ? 1 : -1;
+            float routing = math.smoothstep(0, CrowdConstants.CrowdPackingRange, math.max(0, distance - config.AttackRange));
+            routing *= CrowdConstants.CrowdTargetDensity / (CrowdConstants.CrowdTargetDensity + separation.Density);
+            float2 velocity = direction * speed + tangent * (side * baseSpeed * separation.Weight * CrowdConstants.LateralSteeringScale * routing);
             float length = math.length(velocity);
-            velocity *= math.min(1, math.max(speed, baseSpeed) / math.max(length, 1e-6f));
+            velocity *= math.min(1, math.max(speed, baseSpeed) / math.max(length, NumericalConstants.MinimumDivisor));
             transform.Position.xy += velocity * Dt; transform.Position.z = 0;
             Transforms[e] = transform; Velocities[e] = new MovementVelocity { Value = velocity }; Separation[e] = separation;
         }
@@ -86,10 +83,14 @@ namespace GameHolder.PureDots
                 if (!A.Projectiles.IsComponentEnabled(e)) continue;
                 var transform = A.Transforms[e];
                 A.Previous[e] = new PreviousPosition { Value = transform.Position.xy };
-                transform.Position.xy += A.Velocities[e].Value * Dt; transform.Position.z = 0;
+                var projectile = A.ProjectileData[e];
+                projectile.ActiveStepFraction = Dt > 0 ? math.saturate(projectile.RemainingLifetime / Dt) : 1;
+                transform.Position.xy += A.Velocities[e].Value * (Dt * projectile.ActiveStepFraction); transform.Position.z = 0;
                 A.Transforms[e] = transform;
-                var projectile = A.ProjectileData[e]; projectile.RemainingLifetime -= Dt; A.ProjectileData[e] = projectile;
-                if (projectile.RemainingLifetime <= 0) A.Deactivations.Enqueue(e);
+                projectile.RemainingLifetime -= Dt; A.ProjectileData[e] = projectile;
+                // Undetonated explosives resolve their expiry in the combat stage.
+                if (projectile.RemainingLifetime <= 0 && !(A.Explosives.HasComponent(e) &&
+                    A.Explosives.IsComponentEnabled(e) && A.Explosives[e].Detonated == 0)) A.Deactivations.Enqueue(e);
             }
         }
     }

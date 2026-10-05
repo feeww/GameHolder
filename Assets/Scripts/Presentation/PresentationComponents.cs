@@ -20,15 +20,17 @@ namespace GameHolder.PureDots
     public static class PresentationDepth
     {
         public static float Calculate(float y, float cameraY, float speed = 0) =>
-            SimulationConstants.CameraZMinOffset +
-            (math.clamp(y - cameraY, -SimulationConstants.CameraViewportExtentY, SimulationConstants.CameraViewportExtentY)
-                + SimulationConstants.CameraViewportExtentY) * SimulationConstants.CameraDepthScale - speed * SimulationConstants.SpeedDepthScale;
-        public static float4 TierColor(uint tier) => tier == 3 ? new float4(1, .84f, 0, 1) : tier == 2
-            ? new float4(.9f, .3f, 1, 1) : tier == 1 ? new float4(.2f, .8f, 1, 1) : new float4(.2f, 1, .4f, 1);
-        public static float4 TierUV(uint tier) => new float4(.5f, .5f, (tier & 1) * .5f, (tier >> 1) * .5f);
+            PresentationConstants.CameraZMinOffset +
+            (math.clamp(y - cameraY, -PresentationConstants.CameraViewportExtentY, PresentationConstants.CameraViewportExtentY)
+                + PresentationConstants.CameraViewportExtentY) * PresentationConstants.CameraDepthScale - speed * PresentationConstants.SpeedDepthScale;
+        public static float4 TierColor(uint tier) => tier == 3 ? PresentationConstants.GemTier3Color : tier == 2
+            ? PresentationConstants.GemTier2Color : tier == 1 ? PresentationConstants.GemTier1Color : PresentationConstants.GemTier0Color;
+        public static float4 TierUV(uint tier) => new float4(PresentationConstants.GemAtlasUVScale, PresentationConstants.GemAtlasUVScale,
+            (tier % PresentationConstants.GemAtlasGridSize) * PresentationConstants.GemAtlasUVScale,
+            (tier / PresentationConstants.GemAtlasGridSize) * PresentationConstants.GemAtlasUVScale);
         public static float2 RebaseFloorPhase(float2 phase, float2 delta, float tileScale)
         {
-            float scale = math.max(.1f, tileScale);
+            float scale = math.max(PresentationConstants.MinimumFloorTileScale, tileScale);
             return math.fmod(math.fmod(phase + delta, scale) + scale, scale);
         }
     }

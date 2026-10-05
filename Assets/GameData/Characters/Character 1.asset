@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3b8a5351f2b62ba459ac525bf558ea9c, type: 3}
+  m_Name: Character 1
+  m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterDefinition
+  MaxHealth: 1000
+  MoveSpeed: 8
+  CollisionRadius: 0.4
+  MagnetRadius: 4
+  InvulnerabilityDuration: 0
+  RespawnGracePeriod: 1.5
+  Weapon: {fileID: 11400000, guid: 829b464ec0ad634469064ca1ddb370df, type: 2}
+  Texture: {fileID: 0}
+  Tint: {r: 0.6731477, g: 0, b: 1, a: 1}
