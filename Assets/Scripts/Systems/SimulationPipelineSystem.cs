@@ -116,6 +116,7 @@ namespace GameHolder.PureDots
         private NativeList<DamageEvent> m_Damage;
         private NativeList<Entity> m_Deactivations;
         private NativeParallelHashMap<Entity, float> m_AreaDamage;
+        private NativeParallelHashMap<Unity.Mathematics.int2, int> m_GemOverflowSlots;
         private bool m_Bound;
         private ComponentLookup<SimulationRunState> m_ReadRun;
         private ComponentLookup<EnemyActiveTag> m_ReadEnemies;
@@ -131,6 +132,7 @@ namespace GameHolder.PureDots
             m_Damage = new NativeList<DamageEvent>(SimulationConstants.DamageBufferCapacity, Allocator.Persistent);
             m_Deactivations = new NativeList<Entity>(SimulationConstants.DeactivationBufferCapacity, Allocator.Persistent);
             m_AreaDamage = new NativeParallelHashMap<Entity, float>(SimulationConstants.MaxEnemies, Allocator.Persistent);
+            m_GemOverflowSlots = new NativeParallelHashMap<Unity.Mathematics.int2, int>(SimulationConstants.MaxEnemies, Allocator.Persistent);
         }
 
         [BurstCompile]
@@ -189,7 +191,7 @@ namespace GameHolder.PureDots
             chain = new ExplosiveCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new LaserCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new DamageResolutionJob { A = m_Access, Damage = m_Damage, Deactivations = m_Deactivations, AreaDamage = m_AreaDamage }.Schedule(chain);
-            chain = new GemLifecycleJob { A = m_Access }.Schedule(chain);
+            chain = new GemLifecycleJob { A = m_Access, OverflowSlots = m_GemOverflowSlots }.Schedule(chain);
             chain = new PlayerAutoAttackJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new EnemyRangedAttackJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new PublishSimulationSnapshotJob { A = m_Access }.Schedule(chain);
@@ -203,6 +205,7 @@ namespace GameHolder.PureDots
             m_Damage.Dispose();
             m_Deactivations.Dispose();
             m_AreaDamage.Dispose();
+            m_GemOverflowSlots.Dispose();
         }
     }
 }

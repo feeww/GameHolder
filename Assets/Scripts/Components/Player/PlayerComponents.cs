@@ -26,7 +26,7 @@ namespace GameHolder.PureDots
         public float CurrentHealth;
         public float MaxHealth;
         public float HealthRegeneration;
-        public uint Experience;
+        public ulong Experience;
         public uint Level;
         public byte IsDead;
     }

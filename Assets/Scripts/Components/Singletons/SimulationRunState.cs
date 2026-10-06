@@ -25,7 +25,8 @@ namespace GameHolder.PureDots
         public byte InventoryOpen;
         public bool Paused => Rewards.Active != 0 || InventoryOpen != 0;
         public double2 WorldOrigin;
-        public uint Tick, Generation, Kills, TotalExperience, AngleCounter;
+        public uint Tick, Generation, Kills, AngleCounter;
+        public ulong TotalExperience;
         public int ExtraSpawns, ActiveEnemies, PlayerProjectiles, EnemyProjectiles, ActiveGems;
         public float AttackTimer, MaxEnemyStep, MaxEnemyRadius, PlayerCollisionRadius;
         public byte GodMode, AutoAttack, ForceRebase, KillAllPending;
@@ -42,7 +43,8 @@ namespace GameHolder.PureDots
         public int WeaponCount, WeaponCapacity;
         public float2 PlayerPosition;
         public double2 WorldOrigin;
-        public uint Generation, Kills, TotalExperience;
+        public uint Generation, Kills;
+        public ulong TotalExperience;
         public int ActiveEnemies, PlayerProjectiles, EnemyProjectiles, ActiveGems;
         public byte GodMode, AutoAttack;
     }

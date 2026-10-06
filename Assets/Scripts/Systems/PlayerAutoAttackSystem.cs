@@ -16,32 +16,59 @@ namespace GameHolder.PureDots
             var run = A.Run[A.State];
             if (run.Paused || run.AutoAttack == 0 || A.Stats[run.Player].IsDead != 0) return;
             var weapon = A.Weapons[run.Player];
-            Attack(ref run, weapon, ref run.AttackTimer);
+            run.AttackTimer += Dt;
+            bool firstDue = run.AttackTimer >= weapon.Interval;
             if (run.Loadout.Count == PlayerLoadout.Capacity)
-                Attack(ref run, run.Loadout.SecondWeapon, ref run.Loadout.SecondAttackTimer);
+                run.Loadout.SecondAttackTimer += Dt;
+            bool secondDue = run.Loadout.Count == PlayerLoadout.Capacity && run.Loadout.SecondAttackTimer >= run.Loadout.SecondWeapon.Interval;
+            if (firstDue || secondDue)
+            {
+                float range = math.max(firstDue ? weapon.Range : 0, secondDue ? run.Loadout.SecondWeapon.Range : 0);
+                bool found = FindTarget(run, range, out float2 target, out float distance);
+                if (firstDue) Attack(ref run, weapon, ref run.AttackTimer, found, target, distance);
+                if (secondDue) Attack(ref run, run.Loadout.SecondWeapon, ref run.Loadout.SecondAttackTimer, found, target, distance);
+            }
             A.Run[A.State] = run;
         }
-        private void Attack(ref SimulationRunState run, PlayerWeapon weapon, ref float timer)
+        private bool FindTarget(in SimulationRunState run, float range, out float2 target, out float closest)
         {
-            timer += Dt;
-            if (timer < weapon.Interval) return;
-            timer -= weapon.Interval;
-            float closest = weapon.Range * weapon.Range; ulong bestKey = ulong.MaxValue;
-            float2 target = run.PlayerPosition + new float2(math.cos(run.AngleCounter * CombatConstants.AutoAimAngleStep), math.sin(run.AngleCounter * CombatConstants.AutoAimAngleStep));
-            float radius = weapon.Range;
-            int2 min = SpatialHashUtils.QuantizeToCell(run.PlayerPosition - radius), max = SpatialHashUtils.QuantizeToCell(run.PlayerPosition + radius);
-            for (int y = min.y; y <= max.y; y++)
+            target = default; closest = range * range; ulong bestKey = ulong.MaxValue;
+            if (run.ActiveEnemies == 0) return false;
+            int2 min = SpatialHashUtils.QuantizeToCell(run.PlayerPosition - range), max = SpatialHashUtils.QuantizeToCell(run.PlayerPosition + range);
+            double cells = ((double)max.x - min.x + 1) * ((double)max.y - min.y + 1);
+            // A pool scan visits allocated slots, so use that cost rather than the active count.
+            if (cells > A.EnemyPool.AllEnemies.Length)
+            {
+                for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+                {
+                    Entity e = A.EnemyPool.AllEnemies[i];
+                    if (A.Enemies.IsComponentEnabled(e))
+                        ConsiderTarget(e, A.Transforms[e].Position.xy, run.PlayerPosition, ref closest, ref bestKey, ref target);
+                }
+            }
+            else for (int y = min.y; y <= max.y; y++)
                 for (int x = min.x; x <= max.x; x++)
                 {
                     if (!A.Grid.TryGetFirstValue(SpatialHashUtils.ComputeHash(x, y), out var entry, out var iterator)) continue;
                     do
                     {
                         if (math.any(entry.CellCoord != new int2(x, y)) || !A.Enemies.IsComponentEnabled(entry.Entity)) continue;
-                        float distance = math.distancesq(entry.Position, run.PlayerPosition); ulong key = DamageEvent.CreateTargetKey(entry.Entity);
-                        if (distance < closest || distance == closest && key < bestKey)
-                        { closest = distance; bestKey = key; target = entry.Position; }
+                        ConsiderTarget(entry.Entity, entry.Position, run.PlayerPosition, ref closest, ref bestKey, ref target);
                     } while (A.Grid.TryGetNextValue(out entry, ref iterator));
                 }
+            return bestKey != ulong.MaxValue;
+        }
+        private static void ConsiderTarget(Entity entity, float2 position, float2 playerPosition, ref float closest, ref ulong bestKey, ref float2 target)
+        {
+            float distance = math.distancesq(position, playerPosition); ulong key = DamageEvent.CreateTargetKey(entity);
+            if (distance < closest || distance == closest && key < bestKey)
+            { closest = distance; bestKey = key; target = position; }
+        }
+        private void Attack(ref SimulationRunState run, PlayerWeapon weapon, ref float timer, bool found, float2 target, float distance)
+        {
+            timer -= weapon.Interval;
+            if (!found || distance > weapon.Range * weapon.Range)
+                target = run.PlayerPosition + new float2(math.cos(run.AngleCounter * CombatConstants.AutoAimAngleStep), math.sin(run.AngleCounter * CombatConstants.AutoAimAngleStep));
             float2 aim = math.normalizesafe(target - run.PlayerPosition, new float2(1, 0));
             WeaponFire.Fire(A, ref run, aim, weapon);
             run.AngleCounter++;

@@ -13,7 +13,8 @@ namespace GameHolder.PureDots
     public struct BaseColorOverride : IComponentData { public float4 Value; }
     public struct GemVisualState : IComponentData
     {
-        public uint Experience, Generation;
+        public ulong Experience;
+        public uint Generation;
         public float FlashTimer;
         public byte WasActive;
     }

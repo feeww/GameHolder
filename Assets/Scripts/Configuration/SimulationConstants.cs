@@ -4,8 +4,8 @@ namespace GameHolder.PureDots
 {
     public static class SimulationConstants
     {
-        public const int MaxEnemies = 3000;
-        public const int MaxProjectiles = 2000;
+        public const int MaxEnemies = 10000;
+        public const int MaxProjectiles = 5000; // Per pool; 10,000 player and enemy projectiles combined.
         public const int MaxGems = 1024;
         public const float FloatingOriginThreshold = 2000.0f;
         public const float FloatingOriginThresholdSq = FloatingOriginThreshold * FloatingOriginThreshold;

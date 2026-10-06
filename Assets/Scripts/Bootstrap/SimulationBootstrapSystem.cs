@@ -119,8 +119,7 @@ namespace GameHolder.PureDots
                     Position = float2.zero,
                     ExperienceValue = 0,
                     Tier = 0,
-                    IsActive = 0,
-                    Padding = 0.0f
+                    IsActive = 0
                 });
 
                 gemPoolSingleton.FreeGems.Enqueue(gem);

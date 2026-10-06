@@ -38,9 +38,10 @@ namespace GameHolder.PureDots
                 if (nearest != Entity.Null)
                 {
                     A.MeleeCooldown[nearest] = new EnemyMeleeCooldown { CooldownTimer = A.Catalog.Value.Configs[(int)A.Types[nearest].Value].ContactAttackInterval };
+                    // Contact was sampled at the tick endpoint, after any earlier swept projectile hits.
                     A.PlayerDamage.Enqueue(new PlayerDamageEvent { SourceEntity = nearest,
                         Damage = A.Catalog.Value.Configs[(int)A.Types[nearest].Value].BaseDamage,
-                        HitDirection = math.normalizesafe(run.PlayerPosition - A.Transforms[nearest].Position.xy), HitTime = 0 });
+                        HitDirection = math.normalizesafe(run.PlayerPosition - A.Transforms[nearest].Position.xy), HitTime = 1 });
                 }
             }
             for (int i = 0; i < A.EnemyProjectilePool.AllProjectiles.Length; i++)

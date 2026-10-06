@@ -22,7 +22,6 @@ namespace GameHolder.PureDots
             Dependency = new EnemyRenderJob { CameraY = snapshot.PlayerPosition.y,
                 Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog }.ScheduleParallel(Dependency);
             Dependency = new ProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
-            Dependency = new WeaponProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
             Dependency = new GemRenderJob { CameraY = snapshot.PlayerPosition.y,
                 Dt = snapshot.InventoryOpen != 0 || snapshot.Rewards.Active != 0 ? 0 : SystemAPI.Time.DeltaTime,
                 Generation = snapshot.Generation }.ScheduleParallel(Dependency);
@@ -54,46 +53,37 @@ namespace GameHolder.PureDots
     {
         public float CameraY;
         public void Execute(in LocalTransform transform, in MovementVelocity velocity, in ProjectileData data,
-            EnabledRefRO<ProjectileActiveTag> active, EnabledRefRW<MaterialMeshInfo> visible, ref LocalToWorld world, ref BaseColorOverride color)
+            in ExplosiveProjectile explosive, in LaserBeam beam,
+            EnabledRefRO<ExplosiveProjectile> isExplosive, EnabledRefRO<LaserBeam> isLaser,
+            EnabledRefRO<ProjectileActiveTag> active, EnabledRefRW<MaterialMeshInfo> visible,
+            ref MaterialMeshInfo mesh, ref LocalToWorld world, ref BaseColorOverride color)
         {
             visible.ValueRW = active.ValueRO;
             if (!active.ValueRO) return;
-            color.Value = data.Color;
-            float3 position = transform.Position;
-            position.z = PresentationDepth.Calculate(position.y, CameraY, math.length(velocity.Value));
-            float2 size = data.Radius * 2 * (data.MaterialIndex > 1 ? data.TextureScale : new float2(1));
-            position.y -= size.y * .5f;
-            world.Value = float4x4.TRS(position, transform.Rotation, new float3(size, 1));
-        }
-    }
-    [BurstCompile]
-    [WithOptions(EntityQueryOptions.IgnoreComponentEnabledState)]
-    public partial struct WeaponProjectileRenderJob : IJobEntity
-    {
-        public float CameraY;
-        public void Execute(in LocalTransform transform, in ProjectileData data, in ExplosiveProjectile explosive, in LaserBeam beam,
-            EnabledRefRO<ExplosiveProjectile> isExplosive, EnabledRefRO<LaserBeam> isLaser,
-            EnabledRefRO<ProjectileActiveTag> active, ref MaterialMeshInfo mesh, ref LocalToWorld world, ref BaseColorOverride color)
-        {
-            if (!active.ValueRO) return;
             bool blast = isExplosive.ValueRO && explosive.Detonated != 0;
             mesh = MaterialMeshInfo.FromRenderMeshArrayIndices(blast ? 0 : data.MaterialIndex > 1 ? data.MaterialIndex : isLaser.ValueRO ? 1 : 0, 0);
-            if (!isExplosive.ValueRO && !isLaser.ValueRO) return;
+            float4 tint = data.Color;
             float3 position = transform.Position;
-            position.z = PresentationDepth.Calculate(position.y, CameraY);
+            position.z = PresentationDepth.Calculate(position.y, CameraY,
+                isExplosive.ValueRO || isLaser.ValueRO ? 0 : math.length(velocity.Value));
+            quaternion rotation = transform.Rotation;
+            float3 scale;
             if (isLaser.ValueRO)
             {
-                color.Value = data.Color;
-                world.Value = float4x4.TRS(position, quaternion.RotateZ(math.atan2(beam.Direction.y, beam.Direction.x) - math.PI * .5f),
-                    new float3(data.Radius * 2, beam.Length, 1));
-                return;
+                rotation = quaternion.RotateZ(math.atan2(beam.Direction.y, beam.Direction.x) - math.PI * .5f);
+                scale = new float3(data.Radius * 2, beam.Length, 1);
             }
-            float radius = explosive.Detonated != 0 ? explosive.BlastRadius : data.Radius;
-            float2 size = radius * 2 * (!blast && data.MaterialIndex > 1 ? data.TextureScale : new float2(1));
-            position.y -= size.y * .5f;
-            color.Value = data.Color;
-            if (explosive.Detonated != 0) color.Value.w *= PresentationConstants.BlastAlphaScale;
-            world.Value = float4x4.TRS(position, quaternion.identity, new float3(size, 1));
+            else
+            {
+                float radius = blast ? explosive.BlastRadius : data.Radius;
+                float2 size = radius * 2 * (!blast && data.MaterialIndex > 1 ? data.TextureScale : new float2(1));
+                position.y -= size.y * .5f;
+                scale = new float3(size, 1);
+                if (isExplosive.ValueRO) rotation = quaternion.identity;
+                if (blast) tint.w *= PresentationConstants.BlastAlphaScale;
+            }
+            color.Value = tint;
+            world.Value = float4x4.TRS(position, rotation, scale);
         }
     }
     [BurstCompile]

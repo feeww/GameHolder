@@ -83,7 +83,7 @@ namespace GameHolder.PureDots
     public struct GemCollectEvent
     {
         public float2 Position;
-        public uint ExperienceValue;
+        public ulong ExperienceValue;
     }
 
     public struct SimulationBridgeQueuesSingleton : IComponentData

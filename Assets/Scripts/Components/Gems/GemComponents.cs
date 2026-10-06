@@ -7,7 +7,7 @@ namespace GameHolder.PureDots
 {
     public struct GemData : IComponentData
     {
-        public uint ExperienceValue; // 4 bytes
+        public ulong ExperienceValue;
         public uint Tier;            // 4 bytes
         public uint SlotIndex;       // 4 bytes (0 to 1023, links entity to AllGems in O(1))
         public byte IsChest;
@@ -21,13 +21,12 @@ namespace GameHolder.PureDots
     {
         public Entity Entity;        // 8 bytes
         public float2 Position;      // 8 bytes
-        public uint ExperienceValue; // 4 bytes
+        public ulong ExperienceValue;
         public uint Tier;            // 4 bytes
         public byte IsActive;        // 1 byte
         private byte _pad0;          // 1 byte
         private byte _pad1;          // 1 byte
         private byte _pad2;          // 1 byte
-        public float Padding;        // 4 bytes (Total: exactly 32 bytes, cache aligned)
     }
 
     public struct GemPoolSingleton : IComponentData
