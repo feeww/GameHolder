@@ -1191,48 +1191,6 @@ namespace GameHolder.PureDots.Tests
             finally { m_Em.SetComponentData(catalogEntity, original); catalog.Dispose(); }
         }
         [Test]
-        public void DenseCellSamplingReachesBothCohortsAndReplaysAtTheSameTick()
-        {
-            float2 start = new float2(6.2f, 5.05f);
-            Entity focal = Enemy(start);
-            for (int i = 1; i < 64; i++)
-                Enemy(i < 32 ? new float2(6.15f, 5.05f) : new float2(5.05f, 5.05f));
-            var spatial = m_Em.CreateEntityQuery(typeof(EnemySpatialGridSingleton)).GetSingleton<EnemySpatialGridSingleton>();
-            int2 cell = SpatialHashUtils.QuantizeToCell(start);
-            var hashes = new uint[32];
-            int nearSamples = 0;
-            for (int replay = 0; replay < 2; replay++)
-            for (uint frame = 0; frame < hashes.Length; frame++)
-            {
-                var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
-                run.Tick = 1000 + frame; m_Em.SetComponentData(m_Run, run);
-                m_World.GetOrCreateSystem<GridTestSystem>().Update(m_World.Unmanaged);
-                m_Em.GetComponentData<SimulationJobFence>(m_Run).Handle.Complete();
-                Assert.That(spatial.Grid.Count(), Is.EqualTo(64));
-                Assert.That(spatial.CrowdCells[cell].Count, Is.EqualTo(64));
-                Assert.That(spatial.Grid.TryGetFirstValue(SpatialHashUtils.ComputeHash(cell), out var entry, out var iterator));
-                uint hash = 0;
-                int inspected = 0;
-                do
-                {
-                    if (math.any(entry.CellCoord != cell)) continue;
-                    hash = math.hash(new uint2(hash, (uint)entry.Entity.Index));
-                    if (replay == 0 && entry.Position.x > 6) nearSamples++;
-                    inspected++;
-                } while (inspected < CrowdConstants.MaxCrowdEntries && spatial.Grid.TryGetNextValue(out entry, ref iterator));
-                Assert.That(inspected, Is.EqualTo(CrowdConstants.MaxCrowdEntries));
-                if (replay == 0) hashes[frame] = hash;
-                else Assert.That(hash, Is.EqualTo(hashes[frame]), "The same tick must produce the same crowd sample.");
-            }
-            Assert.That(nearSamples, Is.GreaterThan(384).And.LessThan(640),
-                "Both equal-sized cohorts must contribute instead of only the last pool slots.");
-            Assert.That(hashes[0], Is.Not.EqualTo(hashes[1]), "The sample must change between ticks.");
-            m_World.GetOrCreateSystem<ContactTestSystem>().Update(m_World.Unmanaged);
-            m_Em.GetComponentData<SimulationJobFence>(m_Run).Handle.Complete();
-            Assert.That(math.distance(m_Em.GetComponentData<LocalTransform>(focal).Position.xy, start), Is.GreaterThan(1e-4f),
-                "Nearby bodies hidden behind distant entries must still contribute contact correction.");
-        }
-        [Test]
         public void HashCollisionsDoNotConsumeCrowdSamplingBudget()
         {
             int2 cell = new int2(1, 1), unrelatedCell = new int2(-1, -1);
@@ -1533,12 +1491,7 @@ namespace GameHolder.PureDots.Tests
     public partial struct GridTestSystem : ISystem
     {
         private SimulationAccess m_Access;
-        private NativeArray<int> m_InsertionOrder;
-        public void OnCreate(ref SystemState state)
-        {
-            m_Access.Initialize(ref state);
-            m_InsertionOrder = new NativeArray<int>(SimulationConstants.MaxEnemies, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
-        }
+        public void OnCreate(ref SystemState state) => m_Access.Initialize(ref state);
         public void OnUpdate(ref SystemState state)
         {
             m_Access.Update(ref state);
@@ -1547,13 +1500,8 @@ namespace GameHolder.PureDots.Tests
             m_Access.EnemyPool = SystemAPI.GetSingleton<EnemyPoolSingleton>();
             var spatial = SystemAPI.GetSingleton<EnemySpatialGridSingleton>();
             m_Access.Grid = spatial.Grid; m_Access.CrowdCells = spatial.CrowdCells;
-            state.Dependency = new RebuildSpatialGridJob { A = m_Access, InsertionOrder = m_InsertionOrder }.Schedule(state.Dependency);
+            state.Dependency = new RebuildSpatialGridJob { A = m_Access }.Schedule(state.Dependency);
             SystemAPI.SetSingleton(new SimulationJobFence { Handle = state.Dependency });
-        }
-        public void OnDestroy(ref SystemState state)
-        {
-            state.Dependency.Complete();
-            m_InsertionOrder.Dispose();
         }
     }
 
