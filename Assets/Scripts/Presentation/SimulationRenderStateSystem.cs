@@ -23,7 +23,8 @@ namespace GameHolder.PureDots
                 Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog }.ScheduleParallel(Dependency);
             Dependency = new ProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
             Dependency = new WeaponProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
-            Dependency = new GemRenderJob { CameraY = snapshot.PlayerPosition.y, Dt = SystemAPI.Time.DeltaTime,
+            Dependency = new GemRenderJob { CameraY = snapshot.PlayerPosition.y,
+                Dt = snapshot.InventoryOpen != 0 || snapshot.Rewards.Active != 0 ? 0 : SystemAPI.Time.DeltaTime,
                 Generation = snapshot.Generation }.ScheduleParallel(Dependency);
             Dependency = new PlayerRenderJob { CameraY = snapshot.PlayerPosition.y }.Schedule(Dependency);
         }
@@ -60,8 +61,9 @@ namespace GameHolder.PureDots
             color.Value = data.Color;
             float3 position = transform.Position;
             position.z = PresentationDepth.Calculate(position.y, CameraY, math.length(velocity.Value));
-            position.y -= data.Radius;
-            world.Value = float4x4.TRS(position, transform.Rotation, new float3(data.Radius * 2, data.Radius * 2, 1));
+            float2 size = data.Radius * 2 * (data.MaterialIndex > 1 ? data.TextureScale : new float2(1));
+            position.y -= size.y * .5f;
+            world.Value = float4x4.TRS(position, transform.Rotation, new float3(size, 1));
         }
     }
     [BurstCompile]
@@ -74,7 +76,8 @@ namespace GameHolder.PureDots
             EnabledRefRO<ProjectileActiveTag> active, ref MaterialMeshInfo mesh, ref LocalToWorld world, ref BaseColorOverride color)
         {
             if (!active.ValueRO) return;
-            mesh = MaterialMeshInfo.FromRenderMeshArrayIndices(isLaser.ValueRO ? 1 : 0, 0);
+            bool blast = isExplosive.ValueRO && explosive.Detonated != 0;
+            mesh = MaterialMeshInfo.FromRenderMeshArrayIndices(blast ? 0 : data.MaterialIndex > 1 ? data.MaterialIndex : isLaser.ValueRO ? 1 : 0, 0);
             if (!isExplosive.ValueRO && !isLaser.ValueRO) return;
             float3 position = transform.Position;
             position.z = PresentationDepth.Calculate(position.y, CameraY);
@@ -86,10 +89,11 @@ namespace GameHolder.PureDots
                 return;
             }
             float radius = explosive.Detonated != 0 ? explosive.BlastRadius : data.Radius;
-            position.y -= radius;
+            float2 size = radius * 2 * (!blast && data.MaterialIndex > 1 ? data.TextureScale : new float2(1));
+            position.y -= size.y * .5f;
             color.Value = data.Color;
             if (explosive.Detonated != 0) color.Value.w *= PresentationConstants.BlastAlphaScale;
-            world.Value = float4x4.TRS(position, quaternion.identity, new float3(radius * 2, radius * 2, 1));
+            world.Value = float4x4.TRS(position, quaternion.identity, new float3(size, 1));
         }
     }
     [BurstCompile]
@@ -100,7 +104,7 @@ namespace GameHolder.PureDots
         public uint Generation;
         public void Execute(in LocalTransform transform, in GemData gem, EnabledRefRO<GemActiveTag> active,
             EnabledRefRW<MaterialMeshInfo> visible, ref LocalToWorld world, ref SpriteUVOffset uv,
-            ref BaseColorOverride color, ref GemVisualState visual)
+            ref BaseColorOverride color, ref GemVisualState visual, ref MaterialMeshInfo mesh)
         {
             visible.ValueRW = active.ValueRO;
             if (visual.Generation != Generation) visual = new GemVisualState { Generation = Generation };
@@ -108,11 +112,12 @@ namespace GameHolder.PureDots
             if (visual.WasActive != 0 && visual.Experience < gem.ExperienceValue) visual.FlashTimer = PresentationConstants.GemFlashDuration;
             visual.Experience = gem.ExperienceValue; visual.WasActive = 1;
             visual.FlashTimer = math.max(0, visual.FlashTimer - Dt);
-            uv.Value = PresentationDepth.TierUV(gem.Tier);
-            color.Value = math.lerp(PresentationDepth.TierColor(gem.Tier), PresentationConstants.GemFlashColor, math.saturate(visual.FlashTimer / PresentationConstants.GemFlashDuration));
+            mesh = MaterialMeshInfo.FromRenderMeshArrayIndices(gem.IsChest != 0 ? 1 : 0, 0);
+            uv.Value = gem.IsChest != 0 ? new float4(1, 1, 0, 0) : PresentationDepth.TierUV(gem.Tier);
+            color.Value = gem.IsChest != 0 ? new float4(1) : math.lerp(PresentationDepth.TierColor(gem.Tier), PresentationConstants.GemFlashColor, math.saturate(visual.FlashTimer / PresentationConstants.GemFlashDuration));
             float3 position = transform.Position;
             position.z = PresentationDepth.Calculate(position.y, CameraY) + PresentationConstants.GemZOffset;
-            world.Value = float4x4.TRS(position, transform.Rotation, new float3(transform.Scale));
+            world.Value = float4x4.TRS(position, transform.Rotation, gem.IsChest != 0 ? new float3(1.1f, .85f, 1) : new float3(transform.Scale));
         }
     }
     [BurstCompile]

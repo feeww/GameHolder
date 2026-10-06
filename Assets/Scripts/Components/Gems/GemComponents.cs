@@ -10,6 +10,7 @@ namespace GameHolder.PureDots
         public uint ExperienceValue; // 4 bytes
         public uint Tier;            // 4 bytes
         public uint SlotIndex;       // 4 bytes (0 to 1023, links entity to AllGems in O(1))
+        public byte IsChest;
     }
 
     public struct GemActiveTag : IComponentData, IEnableableComponent
@@ -34,12 +35,24 @@ namespace GameHolder.PureDots
         public const int Capacity = SimulationConstants.MaxGems; // Single Source of Truth
         public UnsafeQueue<Entity> FreeGems;
         public UnsafeList<GemSpatialRecord> AllGems; // Exactly 1024 slots (32 KB, L1D cache)
+        public const int ChestCapacity = 128;
+        public UnsafeQueue<Entity> FreeChests;
+        public UnsafeList<ArtifactChest> AllChests;
+    }
+
+    public struct ArtifactChest
+    {
+        public Entity Entity;
+        public float2 Position;
+        public uint Quantity;
+        public byte IsActive;
     }
 
     public struct GemSpawnRequest
     {
         public float2 Position;
         public uint ExperienceValue;
+        public byte IsChest;
     }
 
     public struct GemSpawnQueueSingleton : IComponentData

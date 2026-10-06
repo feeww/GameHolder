@@ -25,7 +25,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
-            if (run.Rewards.Active != 0) return;
+            if (run.Paused) return;
             Damage.Clear();
             // Area weapons stage at most one event per enemy, regardless of overlapping shots.
             foreach (var entry in AreaDamage)
@@ -44,7 +44,15 @@ namespace GameHolder.PureDots
                 A.Enemies.SetComponentEnabled(e, false); A.Ranged.SetComponentEnabled(e, false);
                 A.EnemyPool.InactiveEnemies.Enqueue(e); run.ActiveEnemies--; run.Kills++;
                 float2 position = A.Transforms[e].Position.xy; uint type = A.Types[e].Value;
-                A.GemSpawns.Enqueue(new GemSpawnRequest { Position = position, ExperienceValue = A.Catalog.Value.Configs[(int)type].ExperienceValue });
+                var config = A.Catalog.Value.Configs[(int)type];
+                A.GemSpawns.Enqueue(new GemSpawnRequest { Position = position, ExperienceValue = config.ExperienceValue });
+                if (A.Rewards.Value.Artifacts.Length > 0 && config.ChestDropChance > 0)
+                {
+                    var random = new Unity.Mathematics.Random(math.max(1u, run.ArtifactRandomState));
+                    if (random.NextFloat() < config.ChestDropChance)
+                        A.GemSpawns.Enqueue(new GemSpawnRequest { Position = position, IsChest = 1 });
+                    run.ArtifactRandomState = random.state;
+                }
                 if (A.Bridge.DeathEventQueue.Count < SimulationConstants.CosmeticQueueCapacity)
                     A.Bridge.DeathEventQueue.Enqueue(new DeathEvent { Position = position, TypeId = type });
             }

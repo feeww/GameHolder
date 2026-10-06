@@ -22,5 +22,7 @@ MonoBehaviour:
   BlastRadius: 3
   ProjectileCount: 1
   SpreadAngle: 0
+  WeaponTexture: {fileID: 2800000, guid: e7e668b58855ae14b94bc6252655213e, type: 3}
+  ProjectileTexture: {fileID: 0}
   Tint: {r: 1, g: 0.4, b: 0.05, a: 1}
   UpgradableStats: 63

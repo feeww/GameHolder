@@ -12,7 +12,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
-            if (run.Rewards.Active != 0) return;
+            if (run.Paused) return;
             if (A.Stats[run.Player].IsDead != 0) return;
             bool vulnerable = run.GodMode == 0 && A.Invulnerability[run.Player].Timer <= 0;
             if (vulnerable)

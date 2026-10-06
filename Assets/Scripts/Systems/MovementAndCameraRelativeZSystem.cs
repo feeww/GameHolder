@@ -25,7 +25,7 @@ namespace GameHolder.PureDots
         [NativeDisableParallelForRestriction] public ComponentLookup<EnemyMeleeCooldown> Cooldown;
         public void Execute(int index)
         {
-            if (Run[State].Rewards.Active != 0) return;
+            if (Run[State].Paused) return;
             Entity e = Entities[index];
             if (!Active.IsComponentEnabled(e)) return;
             var transform = Transforms[e];
@@ -74,7 +74,7 @@ namespace GameHolder.PureDots
         public float Dt;
         public void Execute()
         {
-            if (A.Run[A.State].Rewards.Active != 0) return;
+            if (A.Run[A.State].Paused) return;
             Move(A.PlayerPool.AllProjectiles); Move(A.EnemyProjectilePool.AllProjectiles);
         }
         private void Move(UnsafeList<Entity> entities)

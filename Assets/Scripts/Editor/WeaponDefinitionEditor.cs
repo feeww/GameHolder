@@ -11,7 +11,7 @@ namespace GameHolder.PureDots.Editor
             serializedObject.Update();
             var stats = serializedObject.FindProperty("UpgradableStats");
             if (stats != null) EditorGUILayout.PropertyField(stats);
-            DrawPropertiesExcluding(serializedObject, "UpgradableStats", "ProjectileSpeed", "ProjectileLifetime", "BlastRadius", "ProjectileCount", "SpreadAngle");
+            DrawPropertiesExcluding(serializedObject, "UpgradableStats", "ProjectileSpeed", "ProjectileLifetime", "BlastRadius", "ProjectileCount", "SpreadAngle", "WeaponTexture", "ProjectileTexture", "Tint");
             var type = serializedObject.FindProperty("Type");
             bool mixed = type.hasMultipleDifferentValues;
             if (!mixed && type.intValue != (int)WeaponType.Laser)
@@ -25,6 +25,9 @@ namespace GameHolder.PureDots.Editor
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("ProjectileCount"));
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("SpreadAngle"));
             }
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("WeaponTexture"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("ProjectileTexture"));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("Tint"));
             serializedObject.ApplyModifiedProperties();
         }
     }

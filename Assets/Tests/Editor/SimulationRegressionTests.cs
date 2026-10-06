@@ -53,7 +53,10 @@ namespace GameHolder.PureDots.Tests
             var character = UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterDefinition>("Assets/GameData/Characters/DefaultCharacter.asset");
             // Existing combat checks do not open reward prompts; progression checks opt into a lower threshold.
             var rewardSettings = new RewardSettings { ExperiencePerLevel = int.MaxValue };
-            m_Em.AddComponentData(m_Em.CreateEntity(), new RewardCatalogSingleton { Catalog = rewardSettings.BuildCatalog(character, character.Weapon) });
+            var artifactNames = new[] { "VitalGauntlet", "RenewalIdol", "MagnetMedallion" };
+            var artifacts = System.Array.ConvertAll(artifactNames, name => UnityEditor.AssetDatabase.LoadAssetAtPath<ArtifactDefinition>($"Assets/GameData/Artifacts/{name}.asset"));
+            m_Em.AddComponentData(m_Em.CreateEntity(), new RewardCatalogSingleton { Catalog = rewardSettings.BuildCatalog(character, character.Weapon,
+                artifacts: artifacts, artifactChests: new ArtifactChestSettings { ChoicesPerChest = 3 }) });
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<EnemyConfigCatalog>();
             var names = new[] { "Tank", "Runner", "Skirmisher", "Sniper" };
@@ -63,6 +66,7 @@ namespace GameHolder.PureDots.Tests
             {
                 var definition = UnityEditor.AssetDatabase.LoadAssetAtPath<EnemyDefinition>($"Assets/GameData/Enemies/{names[i]}.asset");
                 configs[i] = definition.ToConfig(threshold, startingPlayer.Stats.CollisionRadius);
+                configs[i].ChestDropChance = 0; // Individual drop checks opt in; combat checks keep their original stats.
                 threshold = configs[i].SpawnThreshold;
             }
             m_Em.AddComponentData(m_Em.CreateEntity(), new EnemyConfigCatalogSingleton
@@ -107,8 +111,134 @@ namespace GameHolder.PureDots.Tests
             m_Em.GetComponentData<SimulationJobFence>(m_Run).Handle.Complete();
         }
         private SimulationSnapshot Snapshot => m_Em.GetComponentData<SimulationSnapshot>(m_Run);
+        private void SelectArtifact(int index)
+        {
+            var snapshot = Snapshot;
+            int choice = -1;
+            for (int i = 0; i < snapshot.Rewards.Choices.Length; i++)
+                if (snapshot.Rewards.Choices[i].Kind == RewardKind.Artifact && snapshot.Rewards.Choices[i].ArtifactIndex == index) choice = i;
+            Assert.That(choice, Is.GreaterThanOrEqualTo(0));
+            var command = new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = choice,
+                Generation = snapshot.Generation, PromptId = snapshot.Rewards.PromptId };
+            m_Commands.Enqueue(command); m_Commands.Enqueue(command); Tick(0);
+        }
+        [Test]
+        public void ArtifactChestsRespectEnemyChanceStackWithUpgradesPauseRegenerationAndReset()
+        {
+            var enemies = m_Em.CreateEntityQuery(typeof(EnemyConfigCatalogSingleton)).GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
+            var catalog = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog;
+            var pool = m_Em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>();
+            var spawns = m_Em.CreateEntityQuery(typeof(GemSpawnQueueSingleton)).GetSingleton<GemSpawnQueueSingleton>().SpawnQueue;
+            try
+            {
+                enemies.Value.Configs[0].ChestDropChance = 1;
+                Enemy(new float2(20, 0), 0); Enemy(new float2(20, 1), 1);
+                Command(SimulationCommandKind.KillAll); Tick(0);
+                Assert.That(Snapshot.Kills, Is.EqualTo(2));
+                Assert.That(pool.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity - 1));
+                Assert.That(Snapshot.Inventory.Items.Length, Is.Zero);
+                var stats = Snapshot.Player; stats.CurrentHealth = 10; m_Em.SetComponentData(m_Player, stats);
+                for (int i = 0; i < 4; i++) spawns.Enqueue(new GemSpawnRequest { IsChest = 1 });
+                Tick(0);
+                Assert.That(Snapshot.PendingChests, Is.EqualTo(4)); Assert.That(Snapshot.Inventory.Items.Length, Is.Zero);
+                Assert.That(Snapshot.Rewards.Active, Is.EqualTo(1));
+                m_Em.SetComponentData(m_Input, new SimulationInput { Movement = new float2(1, 0) }); Tick(1);
+                Assert.That(Snapshot.PlayerPosition, Is.EqualTo(float2.zero)); Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(10));
+                m_Em.SetComponentData(m_Input, default(SimulationInput));
+                foreach (int index in new[] { 0, 0, 1, 2 }) SelectArtifact(index);
+                Assert.That(Snapshot.PendingChests, Is.Zero); Assert.That(Snapshot.Rewards.Active, Is.Zero);
+                Assert.That(Snapshot.Inventory.Items.Length, Is.EqualTo(3));
+                Assert.That(Snapshot.Inventory.Items[0].Quantity, Is.EqualTo(2));
+                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth + 50));
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(60));
+                Assert.That(Snapshot.Player.MagnetRadius, Is.EqualTo(DefaultPlayer.Stats.MagnetRadius + .5f));
+                Assert.That(Snapshot.Player.HealthRegeneration, Is.EqualTo(1));
+                var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                run.Rewards = new RewardSelection { Active = 1, Pending = 1, PromptId = 9 };
+                run.Rewards.Choices.Add(new RewardChoice { Target = 0, Stat = UpgradeStat.MaxHealth, Bonus = .1f });
+                m_Em.SetComponentData(m_Run, run);
+                m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = 0, PromptId = 9, Generation = run.Generation }); Tick(0);
+                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth * 1.1f + 50));
+                Assert.That(Snapshot.Player.MagnetRadius, Is.EqualTo(DefaultPlayer.Stats.MagnetRadius + .5f));
+                Entity enemy = Enemy(new float2(20, 0)); Entity projectile = Projectile(new float2(10, 10), new float2(1, 0), true);
+                var enemyPosition = m_Em.GetComponentData<LocalTransform>(enemy).Position;
+                var projectilePosition = m_Em.GetComponentData<LocalTransform>(projectile).Position;
+                float lifetime = m_Em.GetComponentData<ProjectileData>(projectile).RemainingLifetime;
+                float waveTimer = m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).Timer;
+                float health = Snapshot.Player.CurrentHealth;
+                m_Em.SetComponentData(m_Input, new SimulationInput { Movement = new float2(1, 0) });
+                m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Value = 1, Generation = Snapshot.Generation }); Tick(1);
+                Assert.That(Snapshot.InventoryOpen, Is.EqualTo(1)); Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(health));
+                Assert.That(Snapshot.PlayerPosition, Is.EqualTo(float2.zero));
+                Assert.That(m_Em.GetComponentData<LocalTransform>(enemy).Position, Is.EqualTo(enemyPosition));
+                Assert.That(m_Em.GetComponentData<LocalTransform>(projectile).Position, Is.EqualTo(projectilePosition));
+                Assert.That(m_Em.GetComponentData<ProjectileData>(projectile).RemainingLifetime, Is.EqualTo(lifetime));
+                Assert.That(m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).Timer, Is.EqualTo(waveTimer));
+                m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Generation = Snapshot.Generation - 1 }); Tick(1);
+                Assert.That(Snapshot.InventoryOpen, Is.EqualTo(1));
+                m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Generation = Snapshot.Generation }); Tick(1);
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(health + 1)); Assert.That(Snapshot.PlayerPosition.x, Is.GreaterThan(0));
+                m_Em.SetComponentData(m_Player, new PlayerInvulnerability { Timer = 1000 });
+                stats = Snapshot.Player; stats.CurrentHealth = stats.MaxHealth - .1f; m_Em.SetComponentData(m_Player, stats); Tick(1);
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(stats.MaxHealth));
+                stats = Snapshot.Player; stats.CurrentHealth = 0; stats.IsDead = 1; m_Em.SetComponentData(m_Player, stats); Tick(1);
+                Assert.That(Snapshot.Player.CurrentHealth, Is.Zero); Assert.That(Snapshot.Player.IsDead, Is.EqualTo(1));
+                run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                run.InventoryOpen = 1; run.PendingChests = 2; ArtifactRoll.Open(ref run, ref catalog.Value); m_Em.SetComponentData(m_Run, run);
+                m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Generation = Snapshot.Generation }); Tick(1);
+                Assert.That(Snapshot.InventoryOpen, Is.Zero); Assert.That(Snapshot.Rewards.Active, Is.EqualTo(1));
+                Command(SimulationCommandKind.Restart); Tick(0);
+                Assert.That(Snapshot.Inventory.Items.Length, Is.Zero); Assert.That(Snapshot.InventoryOpen, Is.Zero);
+                Assert.That(Snapshot.PendingChests, Is.Zero); Assert.That(Snapshot.Rewards.Active, Is.Zero);
+                Assert.That(Snapshot.Player.HealthRegeneration, Is.Zero); Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
+                Assert.That(pool.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity));
+            }
+            finally { enemies.Value.Configs[0].ChestDropChance = 0; }
+        }
+        [Test]
+        public void ChestPoolOverflowPreservesArtifactQuantitiesAndRebasesPositions()
+        {
+            var pool = m_Em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>();
+            var spawns = m_Em.CreateEntityQuery(typeof(GemSpawnQueueSingleton)).GetSingleton<GemSpawnQueueSingleton>().SpawnQueue;
+            for (int i = 0; i < GemPoolSingleton.ChestCapacity + 4; i++)
+                spawns.Enqueue(new GemSpawnRequest { IsChest = 1, Position = new float2(20, 0) });
+            Tick(0);
+            uint copies = 0;
+            for (int i = 0; i < pool.AllChests.Length; i++) copies += pool.AllChests[i].Quantity;
+            Assert.That(copies, Is.EqualTo(GemPoolSingleton.ChestCapacity + 4));
+            var position = pool.AllChests[0].Position;
+            Command(SimulationCommandKind.ForceRebase); Tick(0);
+            Assert.That((double2)pool.AllChests[0].Position + Snapshot.WorldOrigin, Is.EqualTo((double2)position));
+            m_Em.SetComponentData(m_Player, LocalTransform.FromPosition(new float3(pool.AllChests[0].Position, 0))); Tick(0);
+            Assert.That(Snapshot.PendingChests, Is.EqualTo(GemPoolSingleton.ChestCapacity + 4));
+            for (int i = 0; i < GemPoolSingleton.ChestCapacity + 4; i++) SelectArtifact(0);
+            Assert.That(Snapshot.Inventory.Items.Length, Is.EqualTo(1));
+            Assert.That(Snapshot.Inventory.Items[0].Quantity, Is.EqualTo(GemPoolSingleton.ChestCapacity + 4));
+            Assert.That(pool.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity));
+        }
+        [Test]
+        public void ChestChoicesPreserveQueuedLevelUpsAndInventoryPause()
+        {
+            var run = m_Em.GetComponentData<SimulationRunState>(m_Run); run.Rewards.Pending = 1;
+            m_Em.SetComponentData(m_Run, run);
+            var spawns = m_Em.CreateEntityQuery(typeof(GemSpawnQueueSingleton)).GetSingleton<GemSpawnQueueSingleton>().SpawnQueue;
+            spawns.Enqueue(new GemSpawnRequest { IsChest = 1 }); spawns.Enqueue(new GemSpawnRequest { IsChest = 1 }); Tick(0);
+            Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(1)); Assert.That(Snapshot.PendingChests, Is.EqualTo(2));
+            m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Value = 1, Generation = Snapshot.Generation }); Tick(0);
+            SelectArtifact(0);
+            Assert.That(Snapshot.PendingChests, Is.EqualTo(1)); Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(1));
+            m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Generation = Snapshot.Generation }); Tick(0);
+            Assert.That(m_Em.GetComponentData<SimulationRunState>(m_Run).Paused, Is.True);
+            SelectArtifact(1);
+            Assert.That(Snapshot.PendingChests, Is.Zero); Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(1));
+            Assert.That(Snapshot.Rewards.Choices[0].Kind, Is.Not.EqualTo(RewardKind.Artifact));
+            m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = 0,
+                Generation = Snapshot.Generation, PromptId = Snapshot.Rewards.PromptId }); Tick(0);
+            Assert.That(Snapshot.Rewards.Active, Is.Zero); Assert.That(Snapshot.Rewards.Pending, Is.Zero);
+            Assert.That(Snapshot.Inventory.Items.Length, Is.EqualTo(2));
+        }
         [TestCase(false)] [TestCase(true)]
-        public void RewardSequenceChangesOnRestartUnlessFixedSeedIsEnabled(bool fixedSeed)
+        public void RewardAndArtifactSequencesChangeOnRestartUnlessFixedSeedIsEnabled(bool fixedSeed)
         {
             var catalog = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog;
             byte previousMode = catalog.Value.UseFixedSeed;
@@ -117,12 +247,16 @@ namespace GameHolder.PureDots.Tests
                 catalog.Value.UseFixedSeed = (byte)(fixedSeed ? 1 : 0);
                 var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
                 run.Rewards.RandomState = RewardRoll.SeedForRun(ref catalog.Value, run.Generation);
+                run.ArtifactRandomState = ArtifactRoll.SeedForRun(ref catalog.Value, run.Generation);
                 uint previousSeed = run.Rewards.RandomState;
+                uint previousArtifactSeed = run.ArtifactRandomState;
                 m_Em.SetComponentData(m_Run, run);
                 Command(SimulationCommandKind.Restart); Tick();
                 run = m_Em.GetComponentData<SimulationRunState>(m_Run);
                 Assert.That(run.Rewards.RandomState, Is.EqualTo(RewardRoll.SeedForRun(ref catalog.Value, run.Generation)));
                 Assert.That(run.Rewards.RandomState == previousSeed, Is.EqualTo(fixedSeed));
+                Assert.That(run.ArtifactRandomState, Is.EqualTo(ArtifactRoll.SeedForRun(ref catalog.Value, run.Generation)).And.Not.Zero);
+                Assert.That(run.ArtifactRandomState == previousArtifactSeed, Is.EqualTo(fixedSeed));
             }
             finally { catalog.Value.UseFixedSeed = previousMode; }
         }
@@ -167,6 +301,8 @@ namespace GameHolder.PureDots.Tests
                 Command(SimulationCommandKind.Restart); Tick();
                 var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
                 Assert.That(run.Loadout.Count, Is.EqualTo(1)); Assert.That(run.Loadout.FirstBonuses.Damage, Is.Zero);
+                Assert.That(Snapshot.Loadout.FirstLevel, Is.EqualTo(1)); Assert.That(Snapshot.Loadout.SecondLevel, Is.Zero);
+                Assert.That(Snapshot.FirstWeapon.Damage, Is.EqualTo(DefaultPlayer.Weapon.Damage));
                 Assert.That(run.Rewards.Active, Is.Zero); Assert.That(run.Rewards.Pending, Is.Zero);
                 Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
             }
@@ -378,6 +514,7 @@ namespace GameHolder.PureDots.Tests
         public void SelectedWeaponFiresOnlyItsOwnPooledProjectiles(WeaponType type, int count)
         {
             var weapon = TestWeapon(type);
+            weapon.MaterialIndex = 3; weapon.TextureScale = new float2(1, .5f);
             m_Em.SetComponentData(m_Player, weapon);
             Command(SimulationCommandKind.AutoAttack, 1); Tick(weapon.Interval);
             using var projectiles = m_Em.CreateEntityQuery(typeof(ProjectileActiveTag), typeof(PlayerProjectileTag)).ToEntityArray(Allocator.Temp);
@@ -386,6 +523,8 @@ namespace GameHolder.PureDots.Tests
             {
                 Assert.That(m_Em.IsComponentEnabled<ExplosiveProjectile>(e), Is.EqualTo(type == WeaponType.Explosive));
                 Assert.That(m_Em.IsComponentEnabled<LaserBeam>(e), Is.EqualTo(type == WeaponType.Laser));
+                Assert.That(m_Em.GetComponentData<ProjectileData>(e).MaterialIndex, Is.EqualTo(3));
+                Assert.That(m_Em.GetComponentData<ProjectileData>(e).TextureScale, Is.EqualTo(weapon.TextureScale));
                 Assert.That(math.all(math.isfinite(m_Em.GetComponentData<MovementVelocity>(e).Value)));
             }
         }
@@ -477,6 +616,45 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(m_Em.GetComponentData<MaterialMeshInfo>(e).Material, Is.EqualTo(MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0).Material));
             }
             finally { m_Em.DestroyEntity(e); }
+        }
+        [Test]
+        public void WeaponTextureSurvivesRewardConversionRenderingAndPoolReuse()
+        {
+            var texture = new Texture2D(8, 4);
+            var weapon = ScriptableObject.CreateInstance<CharacterWeaponDefinition>();
+            Entity projectile = m_Em.CreateEntity(typeof(LocalTransform), typeof(LocalToWorld), typeof(MovementVelocity), typeof(ProjectileData),
+                typeof(ProjectileActiveTag), typeof(ExplosiveProjectile), typeof(LaserBeam), typeof(MaterialMeshInfo), typeof(BaseColorOverride));
+            try
+            {
+                weapon.ProjectileTexture = texture;
+                var character = UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterDefinition>("Assets/GameData/Characters/DefaultCharacter.asset");
+                using var catalog = new RewardSettings { Weapons = new[] { weapon } }.BuildCatalog(character, character.Weapon, w => w == weapon ? 3 : 0);
+                var config = catalog.Value.Weapons[1].Config;
+                Assert.That(config.MaterialIndex, Is.EqualTo(3));
+                Assert.That(config.TextureScale, Is.EqualTo(new float2(1, .5f)));
+                m_Em.SetComponentData(projectile, LocalTransform.FromPosition(new float3(2, 10, 0)));
+                m_Em.SetComponentData(projectile, new ProjectileData { Radius = 2, MaterialIndex = config.MaterialIndex, TextureScale = config.TextureScale });
+                m_Em.SetComponentEnabled<ExplosiveProjectile>(projectile, false);
+                m_Em.SetComponentEnabled<LaserBeam>(projectile, false);
+                var renderer = m_World.GetOrCreateSystemManaged<SimulationRenderStateSystem>();
+                renderer.Update(); m_Em.CompleteAllTrackedJobs();
+                var matrix = m_Em.GetComponentData<LocalToWorld>(projectile).Value;
+                Assert.That(math.length(matrix.c0.xyz), Is.EqualTo(4).Within(.001f));
+                Assert.That(math.length(matrix.c1.xyz), Is.EqualTo(2).Within(.001f));
+                Assert.That(matrix.c3.y + 1, Is.EqualTo(10).Within(.001f));
+                Assert.That(m_Em.GetComponentData<MaterialMeshInfo>(projectile).Material, Is.EqualTo(MaterialMeshInfo.FromRenderMeshArrayIndices(3, 0).Material));
+                m_Em.SetComponentData(projectile, new ExplosiveProjectile { Detonated = 1, BlastRadius = 3 });
+                m_Em.SetComponentEnabled<ExplosiveProjectile>(projectile, true);
+                renderer.Update(); m_Em.CompleteAllTrackedJobs();
+                Assert.That(m_Em.GetComponentData<MaterialMeshInfo>(projectile).Material, Is.EqualTo(MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0).Material));
+                Assert.That(math.length(m_Em.GetComponentData<LocalToWorld>(projectile).Value.c1.xyz), Is.EqualTo(6).Within(.001f));
+                m_Em.SetComponentData(projectile, new ProjectileData { Radius = 2 });
+                m_Em.SetComponentEnabled<ExplosiveProjectile>(projectile, false);
+                m_Em.SetComponentEnabled<LaserBeam>(projectile, true);
+                renderer.Update(); m_Em.CompleteAllTrackedJobs();
+                Assert.That(m_Em.GetComponentData<MaterialMeshInfo>(projectile).Material, Is.EqualTo(MaterialMeshInfo.FromRenderMeshArrayIndices(1, 0).Material));
+            }
+            finally { m_Em.DestroyEntity(projectile); Object.DestroyImmediate(weapon); Object.DestroyImmediate(texture); }
         }
         [Test]
         public void AuthoringAssetsProduceClampedNativeCharacterAndEnemyData()

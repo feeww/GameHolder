@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9f1c2d7c616969e45b4fd5f7463379c8, type: 3}
+  m_Name: MagnetMedallion
+  m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.ArtifactDefinition
+  Texture: {fileID: 2800000, guid: 58e409c8ca21dcd45b413053b6ba3f51, type: 3}
+  Rarity: 1
+  IconUV:
+    serializedVersion: 2
+    x: 0.30642858
+    y: 0.11285714
+    width: 0.38714287
+    height: 0.7742857
+  MaxHealth: 0
+  PickupRadius: 0.5
+  HealthRegeneration: 0

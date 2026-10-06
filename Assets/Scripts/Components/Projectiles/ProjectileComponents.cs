@@ -11,6 +11,8 @@ namespace GameHolder.PureDots
         public float Radius;
         public float RemainingLifetime;
         public float4 Color;
+        public int MaterialIndex;
+        public float2 TextureScale;
         public float ActiveStepFraction; // Fraction of the current simulation tick before expiry.
     }
 

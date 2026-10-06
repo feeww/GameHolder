@@ -33,6 +33,9 @@ namespace GameHolder.PureDots
                     case SimulationCommandKind.ForceRebase: run.ForceRebase = 1; break;
                     case SimulationCommandKind.KillAll: run.KillAllPending = 1; break;
                     case SimulationCommandKind.Restart: Reset(ref run); break;
+                    case SimulationCommandKind.Inventory:
+                        if (command.Generation == run.Generation) run.InventoryOpen = (byte)(command.Value != 0 ? 1 : 0);
+                        break;
                     case SimulationCommandKind.SelectReward:
                         var rewardStats = A.Stats[run.Player];
                         var rewardWeapon = A.Weapons[run.Player];
@@ -41,7 +44,7 @@ namespace GameHolder.PureDots
                         break;
                 }
             }
-            if (run.Rewards.Active != 0)
+            if (run.Paused)
             {
                 run.PlayerVelocity = float2.zero;
                 A.Velocities[run.Player] = default;
@@ -59,6 +62,11 @@ namespace GameHolder.PureDots
                 }
             }
             var stats = A.Stats[run.Player];
+            if (stats.IsDead == 0)
+            {
+                stats.CurrentHealth = math.min(stats.MaxHealth, stats.CurrentHealth + stats.HealthRegeneration * Dt);
+                A.Stats[run.Player] = stats;
+            }
             var invulnerability = A.Invulnerability[run.Player];
             invulnerability.Timer = math.max(0, invulnerability.Timer - Dt);
             A.Invulnerability[run.Player] = invulnerability;
@@ -118,6 +126,7 @@ namespace GameHolder.PureDots
             byte godMode = run.GodMode, autoAttack = run.AutoAttack;
             run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack,
                 Loadout = RewardRoll.StartingLoadout(), Rewards = new RewardSelection { RandomState = RewardRoll.SeedForRun(ref A.Rewards.Value, generation) },
+                ArtifactRandomState = ArtifactRoll.SeedForRun(ref A.Rewards.Value, generation),
                 PlayerCollisionRadius = A.StartingPlayer.Stats.CollisionRadius };
             A.Stats[player] = A.StartingPlayer.Stats;
             A.Weapons[player] = A.StartingPlayer.Weapon;
@@ -150,6 +159,16 @@ namespace GameHolder.PureDots
                 A.Gems.SetComponentEnabled(record.Entity, false);
                 A.Transforms[record.Entity] = LocalTransform.Identity;
                 A.GemPool.FreeGems.Enqueue(record.Entity);
+            }
+            A.GemPool.FreeChests.Clear();
+            for (int i = 0; i < A.GemPool.AllChests.Length; i++)
+            {
+                var chest = A.GemPool.AllChests[i];
+                chest.IsActive = 0; chest.Quantity = 0; chest.Position = float2.zero;
+                A.GemPool.AllChests[i] = chest;
+                A.Gems.SetComponentEnabled(chest.Entity, false);
+                A.Transforms[chest.Entity] = LocalTransform.Identity;
+                A.GemPool.FreeChests.Enqueue(chest.Entity);
             }
         }
         private void ResetProjectiles(Unity.Collections.LowLevel.Unsafe.UnsafeList<Entity> entities,
@@ -195,6 +214,13 @@ namespace GameHolder.PureDots
                 if (record.IsActive == 0) continue;
                 record.Position -= delta; A.GemPool.AllGems[i] = record;
                 Shift(record.Entity, delta);
+            }
+            for (int i = 0; i < A.GemPool.AllChests.Length; i++)
+            {
+                var chest = A.GemPool.AllChests[i];
+                if (chest.IsActive == 0) continue;
+                chest.Position -= delta; A.GemPool.AllChests[i] = chest;
+                Shift(chest.Entity, delta);
             }
         }
         private void Shift(Entity e, float2 delta)

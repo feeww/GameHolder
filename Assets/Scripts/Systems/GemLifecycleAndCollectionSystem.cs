@@ -12,10 +12,11 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
-            if (run.Rewards.Active != 0) return;
+            if (run.Paused) return;
             var stats = A.Stats[run.Player];
             while (A.GemSpawns.TryDequeue(out var request))
             {
+                if (request.IsChest != 0) { SpawnChest(request); continue; }
                 int slot;
                 bool wasActive;
                 if (A.GemPool.FreeGems.TryDequeue(out var free))
@@ -50,6 +51,14 @@ namespace GameHolder.PureDots
             }
             if (stats.IsDead == 0)
             {
+                for (int i = 0; i < A.GemPool.AllChests.Length; i++)
+                {
+                    var chest = A.GemPool.AllChests[i];
+                    if (chest.IsActive == 0 || math.distancesq(chest.Position, run.PlayerPosition) > stats.MagnetRadius * stats.MagnetRadius) continue;
+                    run.PendingChests += math.min(chest.Quantity, uint.MaxValue - run.PendingChests);
+                    chest.IsActive = 0; A.GemPool.AllChests[i] = chest;
+                    A.Gems.SetComponentEnabled(chest.Entity, false); A.GemPool.FreeChests.Enqueue(chest.Entity);
+                }
                 uint gained = 0;
                 for (int i = 0; i < A.GemPool.AllGems.Length; i++)
                 {
@@ -68,10 +77,37 @@ namespace GameHolder.PureDots
                     stats.Experience -= (uint)required; stats.Level++; run.Rewards.Pending++;
                     required = (ulong)stats.Level * A.Rewards.Value.ExperiencePerLevel;
                 }
+                ArtifactRoll.Open(ref run, ref A.Rewards.Value);
                 RewardRoll.Open(ref run.Rewards, run.Loadout, ref A.Rewards.Value);
                 A.Stats[run.Player] = stats;
             }
             A.Run[A.State] = run;
+        }
+        private void SpawnChest(GemSpawnRequest request)
+        {
+            if (A.Rewards.Value.Artifacts.Length == 0) return;
+            int slot;
+            if (A.GemPool.FreeChests.TryDequeue(out var free)) slot = (int)A.GemData[free].SlotIndex;
+            else
+            {
+                // ponytail: 128 visible chests; overflow stacks chest choices at the nearest chest.
+                slot = -1; float nearest = float.MaxValue;
+                for (int i = 0; i < A.GemPool.AllChests.Length; i++)
+                {
+                    var candidate = A.GemPool.AllChests[i];
+                    float distance = math.distancesq(candidate.Position, request.Position);
+                    if (candidate.IsActive != 0 && distance < nearest) { nearest = distance; slot = i; }
+                }
+                if (slot < 0) return;
+                var existing = A.GemPool.AllChests[slot];
+                if (existing.Quantity < uint.MaxValue) existing.Quantity++;
+                A.GemPool.AllChests[slot] = existing; return;
+            }
+            var chest = A.GemPool.AllChests[slot];
+            chest.Position = request.Position; chest.Quantity = 1; chest.IsActive = 1;
+            A.GemPool.AllChests[slot] = chest;
+            A.Transforms[chest.Entity] = LocalTransform.FromPosition(new float3(chest.Position, 0));
+            A.Gems.SetComponentEnabled(chest.Entity, true);
         }
         public static uint ComputeTier(uint experience) => experience >= ProgressionConstants.GemTier3Experience ? 3u : experience >= ProgressionConstants.GemTier2Experience ? 2u : experience >= ProgressionConstants.GemTier1Experience ? 1u : 0u;
     }

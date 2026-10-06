@@ -409,7 +409,6 @@ MonoBehaviour:
     CharacterTargetWeight: 1
     WeaponTargetWeight: 1
     CharacterStats: 3
-    WeaponStats: 63
     Rarities:
     - Name: Common
       Weight: 70
@@ -427,6 +426,10 @@ MonoBehaviour:
       Weight: 5
       BonusPercent: 25
       Color: {r: 1, g: 0.6470588, b: 0, a: 1}
+    - Name: Ancient
+      Weight: 25
+      BonusPercent: 35
+      Color: {r: 0.85, g: 0.75, b: 1, a: 1}
     m_RarityVersion: 1
     Common:
       Name: 
@@ -443,6 +446,23 @@ MonoBehaviour:
       Weight: 0
       BonusPercent: 0
       Color: {r: 0, g: 0, b: 0, a: 0}
+  m_Artifacts:
+  - {fileID: 11400000, guid: 7ee055bfcb3210a4ab202aac4331daf2, type: 2}
+  - {fileID: 11400000, guid: 0ba02c6cd7556f9479cfec2a7bd31b31, type: 2}
+  - {fileID: 11400000, guid: 52f3c67a8f8f14844a99b9644e767ebb, type: 2}
+  m_ArtifactChests:
+    ChoicesPerChest: 2
+    CommonWeight: 33
+    RareWeight: 33
+    EpicWeight: 34
+    LegendaryWeight: 1
+  m_InventoryTexture: {fileID: 2800000, guid: fe481f7c7665c2546b161af0df73858b, type: 3}
+  m_InventoryUV:
+    serializedVersion: 2
+    x: 0.12346939
+    y: 0.20918368
+    width: 0.76836735
+    height: 0.5908163
   m_Camera: {fileID: 0}
   m_FloorMaterial: {fileID: 0}
   m_EnemyDeathClip: {fileID: 0}

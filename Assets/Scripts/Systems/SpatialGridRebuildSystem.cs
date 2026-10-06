@@ -10,6 +10,7 @@ namespace GameHolder.PureDots
         public SimulationAccess A;
         public void Execute()
         {
+            if (A.Run[A.State].Paused) return;
             A.Grid.Clear();
             A.CrowdCells.Clear();
             var run = A.Run[A.State];

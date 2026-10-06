@@ -97,15 +97,29 @@ namespace GameHolder.PureDots
         private static bool ValidTier(RewardTierSettings tier) => tier != null && !string.IsNullOrWhiteSpace(tier.Name) &&
             FiniteNonnegative(tier.Weight) && math.isfinite(tier.BonusPercent) && tier.BonusPercent > 0 && math.all(math.isfinite(ToColor(tier.Color)));
 
-        public BlobAssetReference<RewardCatalog> BuildCatalog(CharacterDefinition character, CharacterWeaponDefinition startingWeapon)
+        public List<CharacterWeaponDefinition> GetWeapons(CharacterWeaponDefinition startingWeapon)
         {
-            if (!TryValidate(character, startingWeapon, out string error)) throw new InvalidOperationException(error);
             var weapons = new List<CharacterWeaponDefinition> { startingWeapon };
             if (Weapons != null)
                 foreach (var weapon in Weapons) if (weapon != null && !weapons.Contains(weapon)) weapons.Add(weapon);
+            return weapons;
+        }
+        public BlobAssetReference<RewardCatalog> BuildCatalog(CharacterDefinition character, CharacterWeaponDefinition startingWeapon,
+            Func<WeaponDefinition, int> materialIndex = null, IReadOnlyList<ArtifactDefinition> artifacts = null, ArtifactChestSettings artifactChests = null)
+        {
+            if (!TryValidate(character, startingWeapon, out string error)) throw new InvalidOperationException(error);
+            if (artifacts != null && artifacts.Count > ArtifactInventory.Capacity) throw new InvalidOperationException("Artifact roster exceeds inventory capacity.");
+            if (artifacts != null)
+                foreach (var artifact in artifacts)
+                    if (artifact == null || !artifact.TryValidate(out error)) throw new InvalidOperationException(error ?? "Artifact roster contains an empty entry.");
+            artifactChests ??= new ArtifactChestSettings();
+            if (!artifactChests.TryValidate(artifacts, out error)) throw new InvalidOperationException(error);
+            var weapons = GetWeapons(startingWeapon);
             using var builder = new BlobBuilder(Allocator.Temp);
             ref var catalog = ref builder.ConstructRoot<RewardCatalog>();
             catalog.ChoicesPerLevel = ChoicesPerLevel;
+            catalog.ArtifactChoicesPerChest = artifactChests.ChoicesPerChest;
+            catalog.ArtifactRarityWeights = artifactChests.RarityWeights;
             catalog.MaxWeapons = MaxWeapons;
             catalog.NewWeaponChance = NewWeaponChance;
             catalog.ExperiencePerLevel = (uint)ExperiencePerLevel;
@@ -127,10 +141,12 @@ namespace GameHolder.PureDots
             var entries = builder.Allocate(ref catalog.Weapons, weapons.Count);
             for (int i = 0; i < weapons.Count; i++)
             {
-                entries[i].Config = weapons[i].ToConfig();
+                entries[i].Config = weapons[i].ToConfig(materialIndex?.Invoke(weapons[i]) ?? 0);
                 entries[i].Stats = weapons[i].UpgradableStats & WeaponUpgradeStats.All;
                 entries[i].Name.CopyFromTruncated(weapons[i].name);
             }
+            var artifactEntries = builder.Allocate(ref catalog.Artifacts, artifacts?.Count ?? 0);
+            for (int i = 0; i < artifactEntries.Length; i++) artifactEntries[i] = artifacts[i].ToConfig();
             return builder.CreateBlobAssetReference<RewardCatalog>(Allocator.Persistent);
         }
         private static float4 ToColor(Color color) => new float4(color.r, color.g, color.b, color.a);

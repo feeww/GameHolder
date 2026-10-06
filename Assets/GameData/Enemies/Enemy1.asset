@@ -20,6 +20,7 @@ MonoBehaviour:
   ContactAttackInterval: 1
   MeleeStoppingDistance: 0
   ExperienceValue: 10
+  ChestDropChance: 0.01
   SpawnWeight: 0.01
   Ranged: 1
   Weapon: {fileID: 11400000, guid: 2364c1eb06d6227428f985f97208f8a2, type: 2}

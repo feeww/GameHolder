@@ -23,6 +23,10 @@
 /[Uu]ser[Ss]ettings/
 *.log
 
+# Markdown documents and their Unity import metadata
+*.[mM][dD]
+*.[mM][dD].meta
+
 # By default unity supports Blender asset imports, *.blend1 blender files do not need to be commited to version control.
 *.blend1
 *.blend1.meta
@@ -114,3 +118,4 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+/Assets/GameplayAuthoring.md

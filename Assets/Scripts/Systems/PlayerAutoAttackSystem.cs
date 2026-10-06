@@ -14,7 +14,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
-            if (run.Rewards.Active != 0 || run.AutoAttack == 0 || A.Stats[run.Player].IsDead != 0) return;
+            if (run.Paused || run.AutoAttack == 0 || A.Stats[run.Player].IsDead != 0) return;
             var weapon = A.Weapons[run.Player];
             Attack(ref run, weapon, ref run.AttackTimer);
             if (run.Loadout.Count == PlayerLoadout.Capacity)
@@ -84,7 +84,8 @@ namespace GameHolder.PureDots
             a.Previous[projectile] = new PreviousPosition { Value = position };
             a.Velocities[projectile] = new MovementVelocity { Value = direction * weapon.Speed };
             a.ProjectileData[projectile] = new ProjectileData { Damage = weapon.Damage,
-                Radius = weapon.Radius, RemainingLifetime = weapon.Lifetime, Color = weapon.Color, ActiveStepFraction = 1 };
+                Radius = weapon.Radius, RemainingLifetime = weapon.Lifetime, Color = weapon.Color,
+                MaterialIndex = weapon.MaterialIndex, TextureScale = weapon.TextureScale, ActiveStepFraction = 1 };
             a.Explosives.SetComponentEnabled(projectile, false); a.Explosives[projectile] = default;
             a.Lasers.SetComponentEnabled(projectile, false); a.Lasers[projectile] = default;
             a.Projectiles.SetComponentEnabled(projectile, true);

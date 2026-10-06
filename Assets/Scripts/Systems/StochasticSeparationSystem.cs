@@ -74,7 +74,7 @@ namespace GameHolder.PureDots
 
         public void Execute(int index)
         {
-            if (Run[State].Rewards.Active != 0) return;
+            if (Run[State].Paused) return;
             Entity e = Entities[index];
             if (!Active.IsComponentEnabled(e)) return;
             var run = Run[State];

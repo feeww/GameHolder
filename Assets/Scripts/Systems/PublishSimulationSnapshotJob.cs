@@ -13,6 +13,8 @@ namespace GameHolder.PureDots
             A.Snapshots[A.State] = new SimulationSnapshot
             {
                 Player = A.Stats[run.Player], PlayerPosition = run.PlayerPosition, WorldOrigin = run.WorldOrigin,
+                FirstWeapon = A.Weapons[run.Player], Loadout = run.Loadout,
+                Inventory = run.Inventory, InventoryOpen = run.InventoryOpen, PendingChests = run.PendingChests,
                 Rewards = run.Rewards, WeaponCount = run.Loadout.Count, WeaponCapacity = A.Rewards.Value.MaxWeapons,
                 Generation = run.Generation, Kills = run.Kills, TotalExperience = run.TotalExperience,
                 ActiveEnemies = run.ActiveEnemies, PlayerProjectiles = run.PlayerProjectiles,

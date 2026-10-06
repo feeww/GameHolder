@@ -37,9 +37,6 @@ namespace GameHolder.PureDots
             var em = EntityManager;
             var character = settings.StartingCharacter;
             var startingPlayer = character.ToConfig(settings.StartingWeaponAsset);
-            em.AddComponentData(em.CreateEntity(), startingPlayer);
-            em.AddComponentData(em.CreateEntity(), new RewardCatalogSingleton
-            { Catalog = settings.Rewards.BuildCatalog(character, settings.StartingWeaponAsset != null ? settings.StartingWeaponAsset : character.Weapon) });
 
             Mesh quadMesh = PureDotsAssetFactory.CreateBottomCenterQuadMesh();
             var projTex = PureDotsAssetFactory.GenerateProjectileTexture();
@@ -48,7 +45,32 @@ namespace GameHolder.PureDots
             var projMat = PureDotsAssetFactory.CreateSpriteMaterial(projTex);
             var beamMat = PureDotsAssetFactory.CreateSpriteMaterial(Texture2D.whiteTexture);
             var gemMat = PureDotsAssetFactory.CreateSpriteMaterial(gemAtlasTex);
-            var owned = new List<UnityEngine.Object> { quadMesh, projTex, gemAtlasTex, playerMat, projMat, beamMat, gemMat };
+            var chestTex = PureDotsAssetFactory.GenerateChestTexture();
+            var chestMat = PureDotsAssetFactory.CreateSpriteMaterial(chestTex);
+            var owned = new List<UnityEngine.Object> { quadMesh, projTex, gemAtlasTex, playerMat, projMat, beamMat, gemMat, chestTex, chestMat };
+            // Indices 0 and 1 retain the default projectile and beam appearances.
+            var projectileMaterials = new List<Material> { projMat, beamMat };
+            var textureIndices = new Dictionary<Texture2D, int>();
+            int MaterialIndex(WeaponDefinition weapon)
+            {
+                if (weapon == null || weapon.ProjectileTexture == null) return 0;
+                if (textureIndices.TryGetValue(weapon.ProjectileTexture, out int index)) return index;
+                index = projectileMaterials.Count;
+                var material = PureDotsAssetFactory.CreateSpriteMaterial(weapon.ProjectileTexture);
+                textureIndices.Add(weapon.ProjectileTexture, index);
+                projectileMaterials.Add(material); owned.Add(material);
+                return index;
+            }
+            var startingWeapon = settings.StartingWeaponAsset != null ? settings.StartingWeaponAsset : character.Weapon;
+            startingPlayer.Weapon = startingWeapon.ToConfig(MaterialIndex(startingWeapon));
+            em.AddComponentData(em.CreateEntity(), startingPlayer);
+            em.AddComponentData(em.CreateEntity(), new RewardCatalogSingleton
+            { Catalog = settings.Rewards.BuildCatalog(character, startingWeapon, MaterialIndex, settings.GetArtifacts(), settings.ArtifactChests) });
+            if (PureDotsHUD.Instance != null)
+            {
+                PureDotsHUD.Instance.BindWeapons(settings.Rewards.GetWeapons(startingWeapon));
+                PureDotsHUD.Instance.BindArtifacts(settings.GetArtifacts(), settings.InventoryTexture, settings.InventoryUV);
+            }
             var definitions = new List<EnemyDefinition>();
             foreach (var definition in settings.EnemyTypes) if (definition != null) definitions.Add(definition);
             var builder = new BlobBuilder(Allocator.Temp);
@@ -59,6 +81,7 @@ namespace GameHolder.PureDots
             for (int i = 0; i < definitions.Count; i++)
             {
                 configs[i] = definitions[i].ToConfig(threshold, startingPlayer.Stats.CollisionRadius);
+                if (definitions[i].Ranged) configs[i].Weapon.MaterialIndex = MaterialIndex(definitions[i].Weapon);
                 threshold = configs[i].SpawnThreshold;
                 enemyMaterials[i] = PureDotsAssetFactory.CreateSpriteMaterial(definitions[i].Texture != null ? definitions[i].Texture : Texture2D.whiteTexture);
                 owned.Add(enemyMaterials[i]);
@@ -117,7 +140,7 @@ namespace GameHolder.PureDots
             // Player Projectile Prefab
             var playerProjPrefab = em.CreateEntity();
             em.SetName(playerProjPrefab, "PlayerProjPrefab");
-            var projRMA = new RenderMeshArray(new[] { projMat, beamMat }, new[] { quadMesh });
+            var projRMA = new RenderMeshArray(projectileMaterials.ToArray(), new[] { quadMesh });
             RenderMeshUtility.AddComponents(playerProjPrefab, em, renderDesc, projRMA, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
             em.AddComponentData(playerProjPrefab, Unity.Transforms.LocalTransform.FromPosition(new Unity.Mathematics.float3(0, 0, 0)));
             em.AddComponent<PresentationTransformOwner>(playerProjPrefab);
@@ -158,7 +181,7 @@ namespace GameHolder.PureDots
             // Gem Prefab (Material uses GemAtlas with 2x2 frames for Tiers 0-3)
             var gemPrefab = em.CreateEntity();
             em.SetName(gemPrefab, "GemPrefab");
-            var gemRMA = new RenderMeshArray(new[] { gemMat }, new[] { quadMesh });
+            var gemRMA = new RenderMeshArray(new[] { gemMat, chestMat }, new[] { quadMesh });
             RenderMeshUtility.AddComponents(gemPrefab, em, renderDesc, gemRMA, MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0));
             em.AddComponentData(gemPrefab, Unity.Transforms.LocalTransform.FromPosition(new Unity.Mathematics.float3(0, 0, 0)));
             em.AddComponent<PresentationTransformOwner>(gemPrefab);

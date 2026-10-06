@@ -12,6 +12,8 @@ namespace GameHolder.PureDots
         public int Count;
         public float SpreadAngle;
         public float4 Color;
+        public int MaterialIndex;
+        public float2 TextureScale;
     }
 
     public struct StartingPlayerConfig : IComponentData

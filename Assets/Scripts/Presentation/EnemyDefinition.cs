@@ -17,6 +17,8 @@ namespace GameHolder.PureDots
         [Tooltip("Zero uses body contact distance. A larger value stops melee movement earlier.")]
         [Range(0, AuthoringLimits.MaximumRange)] public float MeleeStoppingDistance;
         [Min(0)] public int ExperienceValue;
+        [Tooltip("Chance per death to drop a chest containing one random artifact. 0.01 = 1%.")]
+        [Range(0, 1)] public float ChestDropChance = .01f;
         [Tooltip("Relative spawn frequency in the roster; 2 has twice the spawn chance of 1.")]
         [Range(AuthoringLimits.MinimumSpawnWeight, AuthoringLimits.MaximumSpawnWeight)] public float SpawnWeight = 1;
 
@@ -47,6 +49,7 @@ namespace GameHolder.PureDots
                 AttackRange = range, BaseDamage = Mathf.Max(0, ContactDamage),
                 ContactAttackInterval = Mathf.Clamp(ContactAttackInterval, AuthoringLimits.MinimumAttackInterval, AuthoringLimits.MaximumAttackInterval),
                 ExperienceValue = (uint)Mathf.Max(0, ExperienceValue),
+                ChestDropChance = Mathf.Clamp01(ChestDropChance),
                 SpawnThreshold = previousThreshold + Mathf.Clamp(SpawnWeight, AuthoringLimits.MinimumSpawnWeight, AuthoringLimits.MaximumSpawnWeight),
                 RetreatRange = Ranged ? Mathf.Clamp(RetreatRange, 0, range) : 0,
                 Weapon = weapon, Tint = new float4(Tint.r, Tint.g, Tint.b, Tint.a)

@@ -28,6 +28,118 @@ namespace GameHolder.PureDots.Tests
         public void Teardown() { if (m_Catalog.IsCreated) m_Catalog.Dispose(); }
 
         [Test]
+        public void ArtifactOffersRespectRarityWeightsExcludeDisabledTiersAndStayDistinct()
+        {
+            var artifacts = new ArtifactDefinition[4];
+            try
+            {
+                for (int i = 0; i < artifacts.Length; i++)
+                {
+                    artifacts[i] = ScriptableObject.CreateInstance<ArtifactDefinition>();
+                    artifacts[i].MaxHealth = 1;
+                    artifacts[i].Rarity = i < 2 ? ArtifactRarity.Common : i == 2 ? ArtifactRarity.Rare : ArtifactRarity.Epic;
+                }
+                var settings = new ArtifactChestSettings { ChoicesPerChest = 1, LegendaryWeight = 999 };
+                using var catalog = m_Settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: artifacts, artifactChests: settings);
+                var counts = new int[3];
+                var run = new SimulationRunState { PendingChests = 1, ArtifactRandomState = 12345,
+                    Rewards = new RewardSelection { RandomState = 777 } };
+                for (int i = 0; i < 10000; i++)
+                {
+                    run.Rewards.Active = 0; ArtifactRoll.Open(ref run, ref catalog.Value);
+                    Assert.That(run.Rewards.Choices.Length, Is.EqualTo(1));
+                    counts[run.Rewards.Choices[0].Rarity]++;
+                }
+                Assert.That(counts[0], Is.InRange(6800, 7200));
+                Assert.That(counts[1], Is.InRange(2300, 2700));
+                Assert.That(counts[2], Is.InRange(400, 600));
+                Assert.That(run.Rewards.RandomState, Is.EqualTo(777));
+                catalog.Value.ArtifactChoicesPerChest = RewardSelection.MaxChoices;
+                run.Rewards.Active = 0; ArtifactRoll.Open(ref run, ref catalog.Value);
+                Assert.That(run.Rewards.Choices.Length, Is.EqualTo(4));
+                uint offered = 0;
+                for (int i = 0; i < run.Rewards.Choices.Length; i++)
+                {
+                    uint bit = 1u << run.Rewards.Choices[i].ArtifactIndex;
+                    Assert.That(offered & bit, Is.Zero); offered |= bit;
+                }
+                catalog.Value.ArtifactRarityWeights.x = 0;
+                run.Rewards.Active = 0; var replay = run;
+                ArtifactRoll.Open(ref run, ref catalog.Value); ArtifactRoll.Open(ref replay, ref catalog.Value);
+                Assert.That(run.Rewards.Choices.Length, Is.EqualTo(2));
+                for (int i = 0; i < 2; i++)
+                {
+                    Assert.That(run.Rewards.Choices[i].Rarity, Is.Not.Zero);
+                    Assert.That(run.Rewards.Choices[i].ArtifactIndex, Is.EqualTo(replay.Rewards.Choices[i].ArtifactIndex));
+                }
+            }
+            finally { foreach (var artifact in artifacts) if (artifact != null) Object.DestroyImmediate(artifact); }
+        }
+
+        [Test]
+        public void ArtifactChestAuthoringRejectsInvalidChoicesWeightsAndUnavailableRarities()
+        {
+            var artifact = ScriptableObject.CreateInstance<ArtifactDefinition>();
+            try
+            {
+                artifact.MaxHealth = 1;
+                var artifacts = new[] { artifact };
+                var settings = new ArtifactChestSettings();
+                Assert.That(settings.TryValidate(artifacts, out _), Is.True);
+                settings.ChoicesPerChest = 0; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
+                settings.ChoicesPerChest = 9; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
+                settings.ChoicesPerChest = 8; settings.CommonWeight = float.NaN;
+                Assert.That(settings.TryValidate(artifacts, out _), Is.False);
+                settings.CommonWeight = -1; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
+                settings.CommonWeight = 0; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
+                Assert.Throws<InvalidOperationException>(() => m_Settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: artifacts, artifactChests: settings));
+                artifact.Rarity = (ArtifactRarity)4; Assert.That(artifact.TryValidate(out _), Is.False);
+                artifact.Rarity = ArtifactRarity.Rare; Assert.That(settings.TryValidate(artifacts, out _), Is.True);
+            }
+            finally { Object.DestroyImmediate(artifact); }
+        }
+
+        [Test]
+        public void ChestCardShowsArtifactIconRarityAndBonusAndImageSelectsOnce()
+        {
+            var go = new GameObject("Chest card test"); var commands = new UnsafeQueue<SimulationCommand>(Allocator.Temp);
+            try
+            {
+                var hud = go.AddComponent<PureDotsHUD>();
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                if (PureDotsHUD.Instance != hud) typeof(PureDotsHUD).GetMethod("Awake", flags).Invoke(hud, null);
+                var artifact = UnityEditor.AssetDatabase.LoadAssetAtPath<ArtifactDefinition>("Assets/GameData/Artifacts/VitalGauntlet.asset");
+                hud.BindArtifacts(new[] { artifact }, null);
+                var snapshot = new SimulationSnapshot { Generation = 4, PendingChests = 2, Rewards = new RewardSelection { Active = 1, PromptId = 7 } };
+                snapshot.Rewards.Choices.Add(new RewardChoice { Kind = RewardKind.Artifact, ArtifactIndex = 0, Rarity = (int)ArtifactRarity.Common,
+                    Color = new float4(.8f, .8f, .8f, 1) });
+                hud.ApplySnapshot(snapshot, commands);
+                var canvas = go.transform.Find("HUD canvas");
+                string Label(string path)
+                {
+                    var label = canvas.Find(path).GetComponent<BatchedHudText>();
+                    return new string((char[])typeof(BatchedHudText).GetField("m_Text", flags).GetValue(label), 0,
+                        (int)typeof(BatchedHudText).GetField("m_Length", flags).GetValue(label));
+                }
+                Assert.That(Label("Reward panel/Reward title"), Does.Contain("ARTIFACT CHEST"));
+                Assert.That(Label("Reward panel/Choice 1/Label"), Does.Contain("Common").And.Contain("VitalGauntlet").And.Contain("+25.0 max HP"));
+                var icon = canvas.Find("Reward panel/Choice 1/Weapon image").GetComponent<RawImage>();
+                Assert.That(icon.texture, Is.SameAs(artifact.Texture)); Assert.That(icon.uvRect, Is.EqualTo(artifact.IconUV));
+                var pointer = new UnityEngine.EventSystems.PointerEventData(null) { button = UnityEngine.EventSystems.PointerEventData.InputButton.Left };
+                UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(icon.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerClickHandler);
+                UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(icon.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerClickHandler);
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(commands.Count, Is.EqualTo(1)); Assert.That(commands.TryDequeue(out var command), Is.True);
+                Assert.That(command.Kind, Is.EqualTo(SimulationCommandKind.SelectReward));
+                Assert.That(command.Value, Is.Zero); Assert.That(command.PromptId, Is.EqualTo(7));
+                Assert.That(canvas.Find("Weapon details panel").gameObject.activeSelf, Is.False);
+                snapshot.Rewards.PromptId++; hud.ApplySnapshot(snapshot, commands);
+                Assert.That(canvas.Find("Reward panel/Choice 1").GetComponent<Button>().interactable, Is.True);
+            }
+            finally { Object.DestroyImmediate(go); commands.Dispose(); }
+        }
+
+        [Test]
         public void EveryAvailableWeaponCanAppearOnTheFirstRollAndWeaponCardsDiffer()
         {
             m_Catalog.Dispose();
@@ -296,6 +408,8 @@ namespace GameHolder.PureDots.Tests
             Assert.That(stats.MoveSpeed, Is.EqualTo(baseline.Stats.MoveSpeed));
             Assert.That(weapon.Speed, Is.EqualTo(baseline.Weapon.Speed));
             Assert.That(run.Loadout.SecondWeapon.Speed, Is.EqualTo(run.Loadout.SecondBase.Speed));
+            Assert.That(run.Loadout.FirstLevel, Is.EqualTo(7));
+            Assert.That(run.Loadout.SecondLevel, Is.EqualTo(4));
         }
         private void Apply(ref SimulationRunState run, ref PlayerStats stats, ref PlayerWeapon weapon, StartingPlayerConfig baseline, byte target, UpgradeStat stat, float bonus)
         {
@@ -320,6 +434,8 @@ namespace GameHolder.PureDots.Tests
             command.Generation = 3;
             Assert.That(RewardRoll.Select(ref run, ref stats, ref weapon, baseline, ref m_Catalog.Value, command), Is.True);
             Assert.That(run.Loadout.Count, Is.EqualTo(2));
+            Assert.That(run.Loadout.FirstLevel, Is.EqualTo(1));
+            Assert.That(run.Loadout.SecondLevel, Is.EqualTo(1));
             Assert.That(run.Rewards.Pending, Is.EqualTo(1));
             Assert.That(RewardRoll.Select(ref run, ref stats, ref weapon, baseline, ref m_Catalog.Value, command), Is.False);
             Assert.That(run.Rewards.Choices[0].Kind, Is.EqualTo(RewardKind.StatUpgrade));
@@ -436,6 +552,109 @@ namespace GameHolder.PureDots.Tests
                 snapshot.Rewards.Choices.Length = 1;
                 hud.ApplySnapshot(snapshot, commands);
                 Assert.That(panel.GetComponentsInChildren<Button>().Length, Is.EqualTo(1));
+            }
+            finally { Object.DestroyImmediate(go); commands.Dispose(); }
+        }
+        [TestCase(0)] [TestCase(1)]
+        public void RewardImagesSelectTheirCardAndEquippedWeaponsShowCurrentStats(int choiceIndex)
+        {
+            var go = new GameObject("Weapon menu test"); var commands = new UnsafeQueue<SimulationCommand>(Allocator.Temp);
+            try
+            {
+                var hud = go.AddComponent<PureDotsHUD>();
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                if (PureDotsHUD.Instance != hud) typeof(PureDotsHUD).GetMethod("Awake", flags).Invoke(hud, null);
+                hud.BindWeapons(m_Settings.GetWeapons(m_Character.Weapon));
+                var first = m_Character.Weapon.ToConfig(); first.Damage = 77;
+                var snapshot = new SimulationSnapshot { Generation = 4, WeaponCount = 2, FirstWeapon = first,
+                    Loadout = new PlayerLoadout { Count = 2, FirstIndex = 0, SecondIndex = 1, FirstLevel = 3, SecondLevel = 2,
+                        SecondWeapon = m_Settings.Weapons[0].ToConfig() },
+                    Rewards = new RewardSelection { Active = 1, Pending = 1, PromptId = 7 } };
+                snapshot.Rewards.Choices.Add(new RewardChoice { Kind = RewardKind.NewWeapon, WeaponIndex = 2, Name = new FixedString64Bytes("Laser") });
+                snapshot.Rewards.Choices.Add(new RewardChoice { Target = 1, Stat = UpgradeStat.Damage, Name = new FixedString64Bytes("Rare"), Bonus = .1f });
+                snapshot.Rewards.Choices.Add(new RewardChoice { Target = 0, Stat = UpgradeStat.MaxHealth });
+                hud.ApplySnapshot(snapshot, commands);
+                var canvas = go.transform.Find("HUD canvas");
+                string Label(string path)
+                {
+                    var label = canvas.Find(path).GetComponent<BatchedHudText>();
+                    return new string((char[])typeof(BatchedHudText).GetField("m_Text", flags).GetValue(label), 0,
+                        (int)typeof(BatchedHudText).GetField("m_Length", flags).GetValue(label));
+                }
+                Assert.That(canvas.Find("Selected weapons panel/Weapon 1/Weapon image").GetComponent<RawImage>().texture, Is.SameAs(m_Character.Weapon.WeaponTexture));
+                Assert.That(Label("Selected weapons panel/Weapon 1/Label"), Does.Contain("Level 3"));
+                Assert.That(Label("Selected weapons panel/Weapon 2/Label"), Does.Contain("Level 2"));
+                var preview = canvas.Find("Reward panel/Choice 1/Weapon image");
+                Assert.That(preview.GetComponent<RawImage>().texture, Is.SameAs(m_Settings.Weapons[1].WeaponTexture));
+                Assert.That(canvas.Find("Reward panel/Choice 2/Weapon image").GetComponent<RawImage>().texture, Is.SameAs(m_Character.Weapon.WeaponTexture));
+                Assert.That(Label("Reward panel/Choice 2/Label"), Does.Contain("Level 3 -> 4"));
+                Assert.That(canvas.Find("Reward panel/Choice 3/Weapon image").gameObject.activeSelf, Is.False);
+                var icon = canvas.Find("Reward panel/Choice " + (choiceIndex + 1) + "/Weapon image");
+                var pointer = new UnityEngine.EventSystems.PointerEventData(null)
+                { button = UnityEngine.EventSystems.PointerEventData.InputButton.Left };
+                UnityEngine.EventSystems.ExecuteEvents.ExecuteHierarchy(icon.gameObject, pointer, UnityEngine.EventSystems.ExecuteEvents.pointerClickHandler);
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(canvas.Find("Weapon details panel").gameObject.activeSelf, Is.False);
+                Assert.That(commands.Count, Is.EqualTo(1));
+                Assert.That(commands.TryDequeue(out var command), Is.True);
+                Assert.That(command.Kind, Is.EqualTo(SimulationCommandKind.SelectReward));
+                Assert.That(command.Value, Is.EqualTo(choiceIndex));
+                Assert.That(command.PromptId, Is.EqualTo(7)); Assert.That(command.Generation, Is.EqualTo(4));
+                canvas.Find("Selected weapons panel/Weapon 1").GetComponent<Button>().onClick.Invoke();
+                Assert.That(Label("Weapon details panel/Weapon stats"), Does.Contain("Level 3").And.Contain("Damage: 77.0").And.Contain("Projectiles"));
+                snapshot.FirstWeapon.Damage = 88; snapshot.Loadout.FirstLevel = 4;
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(Label("Weapon details panel/Weapon stats"), Does.Contain("Level 4").And.Contain("Damage: 88.0"));
+                canvas.Find("Selected weapons panel/Weapon 2").GetComponent<Button>().onClick.Invoke();
+                Assert.That(Label("Weapon details panel/Weapon stats"), Does.Contain("Level 2 - Explosive").And.Contain("Blast radius"));
+                snapshot.Generation++; snapshot.WeaponCount = 1; snapshot.Loadout = RewardRoll.StartingLoadout(); snapshot.Rewards = default;
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(canvas.Find("Weapon details panel").gameObject.activeSelf, Is.False);
+                Assert.That(Label("Selected weapons panel/Weapon 1/Label"), Does.Contain("Level 1"));
+                Assert.That(Label("Selected weapons panel/Weapon 2/Label"), Is.EqualTo("Empty slot"));
+                Assert.That(canvas.Find("Selected weapons panel/Weapon 2").GetComponent<Button>().interactable, Is.False);
+            }
+            finally { Object.DestroyImmediate(go); commands.Dispose(); }
+        }
+        [Test]
+        public void BackpackUsesBagImageQueuesPauseAndShowsStackQuantitiesAndStats()
+        {
+            var go = new GameObject("Backpack test"); var commands = new UnsafeQueue<SimulationCommand>(Allocator.Temp);
+            try
+            {
+                var hud = go.AddComponent<PureDotsHUD>();
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                if (PureDotsHUD.Instance != hud) typeof(PureDotsHUD).GetMethod("Awake", flags).Invoke(hud, null);
+                var artifact = UnityEditor.AssetDatabase.LoadAssetAtPath<ArtifactDefinition>("Assets/GameData/Artifacts/VitalGauntlet.asset");
+                var bag = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/GameData/Textures/UI/InventoryBag.png");
+                hud.BindArtifacts(new[] { artifact }, bag);
+                var snapshot = new SimulationSnapshot { Generation = 4, Player = m_Character.ToConfig().Stats, Rewards = new RewardSelection { Active = 1 } };
+                hud.ApplySnapshot(snapshot, commands);
+                var canvas = go.transform.Find("HUD canvas");
+                Assert.That(canvas.Find("Inventory button/Bag image").GetComponent<RawImage>().texture, Is.SameAs(bag));
+                canvas.Find("Inventory button").GetComponent<Button>().onClick.Invoke(); hud.ApplySnapshot(snapshot, commands);
+                Assert.That(commands.TryDequeue(out var command), Is.True);
+                Assert.That(command.Kind, Is.EqualTo(SimulationCommandKind.Inventory)); Assert.That(command.Value, Is.EqualTo(1)); Assert.That(command.Generation, Is.EqualTo(4));
+                Assert.That(canvas.Find("Inventory overlay").gameObject.activeSelf, Is.False);
+                snapshot.InventoryOpen = 1; snapshot.Inventory.Add(0, 2, artifact.ToConfig());
+                snapshot.Inventory.Apply(ref snapshot.Player, m_Character.ToConfig().Stats, default); hud.ApplySnapshot(snapshot, commands);
+                Assert.That(canvas.Find("Inventory overlay").gameObject.activeSelf, Is.True);
+                var panel = canvas.Find("Inventory overlay/Inventory panel");
+                var label = panel.Find("Artifact viewport/Artifacts/Artifact 1/Artifact stats").GetComponent<BatchedHudText>();
+                var text = new string((char[])typeof(BatchedHudText).GetField("m_Text", flags).GetValue(label), 0,
+                    (int)typeof(BatchedHudText).GetField("m_Length", flags).GetValue(label));
+                Assert.That(text, Does.Contain("VitalGauntlet x2").And.Contain("+25.0 HP each").And.Contain("+50.0 total"));
+                Assert.That(panel.Find("Artifact viewport/Artifacts/Artifact 1/Artifact image").GetComponent<RawImage>().texture, Is.SameAs(artifact.Texture));
+                Assert.That(panel.Find("Artifact viewport/Artifacts/Artifact 1/Artifact image").GetComponent<RawImage>().uvRect, Is.EqualTo(artifact.IconUV));
+                Assert.That(panel.Find("Artifact viewport/Artifacts/Artifact 2").gameObject.activeSelf, Is.False);
+                panel.Find("Close inventory (Esc)").GetComponent<Button>().onClick.Invoke(); hud.ApplySnapshot(snapshot, commands);
+                Assert.That(commands.TryDequeue(out command), Is.True); Assert.That(command.Kind, Is.EqualTo(SimulationCommandKind.Inventory)); Assert.That(command.Value, Is.Zero);
+                snapshot.InventoryOpen = 0; hud.ApplySnapshot(snapshot, commands);
+                Assert.That(canvas.Find("Inventory overlay").gameObject.activeSelf, Is.False);
+                Assert.That(canvas.Find("Reward panel").gameObject.activeSelf, Is.True);
+                snapshot.InventoryOpen = 1; snapshot.Inventory = default; hud.ApplySnapshot(snapshot, commands);
+                Assert.That(panel.Find("Artifact viewport/Artifacts/Empty inventory").gameObject.activeSelf, Is.True);
+                hud.Unbind(); Assert.That(canvas.Find("Inventory overlay").gameObject.activeSelf, Is.False);
             }
             finally { Object.DestroyImmediate(go); commands.Dispose(); }
         }

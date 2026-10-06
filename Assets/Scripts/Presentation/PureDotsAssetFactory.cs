@@ -86,6 +86,25 @@ namespace GameHolder.PureDots
             return tex;
         }
 
+        public static Texture2D GenerateChestTexture()
+        {
+            const int size = 64;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { name = "ArtifactChest", filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var pixels = new Color[size * size];
+            for (int y = 8; y < 53; y++)
+                for (int x = 6; x < 58; x++)
+                {
+                    if (y > 43 && (x < 10 || x > 53)) continue;
+                    bool edge = x < 9 || x > 54 || y < 11 || y > 49;
+                    bool metal = x >= 16 && x <= 20 || x >= 43 && x <= 47 || y >= 35 && y <= 38;
+                    bool lockPlate = x >= 28 && x <= 35 && y >= 28 && y <= 42;
+                    pixels[y * size + x] = edge ? new Color(.2f, .1f, .04f) : metal || lockPlate
+                        ? new Color(.95f, .72f, .25f) : y > 38 ? new Color(.62f, .35f, .13f) : new Color(.4f, .2f, .07f);
+                }
+            texture.SetPixels(pixels); texture.Apply(); return texture;
+        }
+
         public static Texture2D GenerateGemAtlasTexture()
         {
             const int atlasSize = PresentationConstants.GemAtlasSize;

@@ -11,7 +11,7 @@ namespace GameHolder.PureDots
     [Flags]
     public enum WeaponUpgradeStats : byte { None = 0, Damage = 1, AttackRate = 2, Range = 4, Size = 8, BlastRadius = 16, Lifetime = 32, All = 63 }
     public enum UpgradeStat : byte { MaxHealth, PickupRadius, Damage, AttackRate, Range, Size, BlastRadius, Lifetime }
-    public enum RewardKind : byte { StatUpgrade, NewWeapon }
+    public enum RewardKind : byte { StatUpgrade, NewWeapon, Artifact }
     public struct RewardWeapon
     {
         public PlayerWeapon Config;
@@ -34,6 +34,9 @@ namespace GameHolder.PureDots
         public float RarityWeightTotal;
         public BlobArray<RewardTier> Rarities;
         public BlobArray<RewardWeapon> Weapons;
+        public BlobArray<ArtifactConfig> Artifacts;
+        public int ArtifactChoicesPerChest;
+        public float4 ArtifactRarityWeights;
     }
     public struct RewardCatalogSingleton : IComponentData { public BlobAssetReference<RewardCatalog> Catalog; }
     public struct RewardChoice
@@ -46,6 +49,7 @@ namespace GameHolder.PureDots
         public float Bonus;
         public float4 Color;
         public int WeaponIndex;
+        public int ArtifactIndex;
         // Weapon name or stat-upgrade rarity name.
         public FixedString64Bytes Name;
     }
@@ -89,6 +93,7 @@ namespace GameHolder.PureDots
     {
         public const int Capacity = 2;
         public int Count, FirstIndex, SecondIndex;
+        public uint FirstLevel, SecondLevel;
         public PlayerWeapon SecondBase, SecondWeapon;
         public UpgradeBonuses CharacterBonuses, FirstBonuses, SecondBonuses;
         public float SecondAttackTimer;
@@ -96,7 +101,7 @@ namespace GameHolder.PureDots
 
     public static class RewardRoll
     {
-        public static PlayerLoadout StartingLoadout() => new PlayerLoadout { Count = 1, FirstIndex = 0, SecondIndex = -1 };
+        public static PlayerLoadout StartingLoadout() => new PlayerLoadout { Count = 1, FirstIndex = 0, SecondIndex = -1, FirstLevel = 1 };
 
         public static uint SeedForRun(ref RewardCatalog catalog, uint generation)
             => catalog.UseFixedSeed != 0 ? catalog.RandomSeed : math.max(1u, math.hash(new uint2(catalog.RandomSeed, generation)));
@@ -205,40 +210,49 @@ namespace GameHolder.PureDots
         public static bool Select(ref SimulationRunState run, ref PlayerStats stats, ref PlayerWeapon firstWeapon,
             StartingPlayerConfig baseline, ref RewardCatalog catalog, SimulationCommand command)
         {
-            if (command.Kind != SimulationCommandKind.SelectReward || run.Rewards.Active == 0 || run.Rewards.Pending == 0 ||
+            if (command.Kind != SimulationCommandKind.SelectReward || run.Rewards.Active == 0 ||
                 stats.IsDead != 0 || command.Value < 0 || command.Value >= run.Rewards.Choices.Length ||
                 command.PromptId != run.Rewards.PromptId || command.Generation != run.Generation) return false;
             var choice = run.Rewards.Choices[command.Value];
-            if (choice.Kind == RewardKind.NewWeapon)
+            if (choice.Kind == RewardKind.Artifact)
+            {
+                if (run.PendingChests == 0 || choice.ArtifactIndex < 0 || choice.ArtifactIndex >= catalog.Artifacts.Length) return false;
+                run.Inventory.Add(choice.ArtifactIndex, 1, catalog.Artifacts[choice.ArtifactIndex]);
+                run.Inventory.Apply(ref stats, baseline.Stats, run.Loadout.CharacterBonuses);
+            }
+            else if (run.Rewards.Pending == 0) return false;
+            else if (choice.Kind == RewardKind.NewWeapon)
             {
                 if (run.Loadout.Count >= math.min(PlayerLoadout.Capacity, catalog.MaxWeapons) ||
                     choice.WeaponIndex < 0 || choice.WeaponIndex >= catalog.Weapons.Length ||
                     choice.WeaponIndex == run.Loadout.FirstIndex || choice.WeaponIndex == run.Loadout.SecondIndex) return false;
                 run.Loadout.SecondBase = run.Loadout.SecondWeapon = catalog.Weapons[choice.WeaponIndex].Config;
                 run.Loadout.SecondIndex = choice.WeaponIndex;
+                run.Loadout.SecondLevel = 1;
                 run.Loadout.Count++;
             }
             else if (choice.Target == 0)
             {
                 run.Loadout.CharacterBonuses.Add(choice.Stat, choice.Bonus);
-                float previousMax = stats.MaxHealth;
-                stats.MaxHealth = baseline.Stats.MaxHealth * (1 + run.Loadout.CharacterBonuses.MaxHealth);
-                stats.CurrentHealth = math.min(stats.MaxHealth, stats.CurrentHealth + stats.MaxHealth - previousMax);
-                stats.MagnetRadius = baseline.Stats.MagnetRadius * (1 + run.Loadout.CharacterBonuses.PickupRadius);
+                run.Inventory.Apply(ref stats, baseline.Stats, run.Loadout.CharacterBonuses);
             }
             else if (choice.Target == 1)
             {
                 run.Loadout.FirstBonuses.Add(choice.Stat, choice.Bonus);
                 firstWeapon = run.Loadout.FirstBonuses.Apply(baseline.Weapon);
+                run.Loadout.FirstLevel = math.max(1u, run.Loadout.FirstLevel) + 1;
             }
             else if (choice.Target == 2 && run.Loadout.Count == PlayerLoadout.Capacity)
             {
                 run.Loadout.SecondBonuses.Add(choice.Stat, choice.Bonus);
                 run.Loadout.SecondWeapon = run.Loadout.SecondBonuses.Apply(run.Loadout.SecondBase);
+                run.Loadout.SecondLevel = math.max(1u, run.Loadout.SecondLevel) + 1;
             }
             else return false;
-            run.Rewards.Pending--;
+            if (choice.Kind == RewardKind.Artifact) run.PendingChests--;
+            else run.Rewards.Pending--;
             run.Rewards.Active = 0;
+            ArtifactRoll.Open(ref run, ref catalog);
             Open(ref run.Rewards, run.Loadout, ref catalog);
             return true;
         }

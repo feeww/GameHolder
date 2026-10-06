@@ -93,7 +93,9 @@ namespace GameHolder.PureDots
             var gemPoolSingleton = new GemPoolSingleton
             {
                 FreeGems = new UnsafeQueue<Entity>(Allocator.Persistent),
-                AllGems = new UnsafeList<GemSpatialRecord>(GemPoolSingleton.Capacity, Allocator.Persistent)
+                AllGems = new UnsafeList<GemSpatialRecord>(GemPoolSingleton.Capacity, Allocator.Persistent),
+                FreeChests = new UnsafeQueue<Entity>(Allocator.Persistent),
+                AllChests = new UnsafeList<ArtifactChest>(GemPoolSingleton.ChestCapacity, Allocator.Persistent)
             };
 
             var preallocatedGems = CollectionHelper.CreateNativeArray<Entity>(GemPoolSingleton.Capacity, Allocator.Temp);
@@ -124,6 +126,17 @@ namespace GameHolder.PureDots
                 gemPoolSingleton.FreeGems.Enqueue(gem);
             }
             preallocatedGems.Dispose();
+            var preallocatedChests = CollectionHelper.CreateNativeArray<Entity>(GemPoolSingleton.ChestCapacity, Allocator.Temp);
+            em.Instantiate(prefabs.GemPrefab, preallocatedChests);
+            for (int i = 0; i < preallocatedChests.Length; i++)
+            {
+                Entity chest = preallocatedChests[i];
+                em.SetComponentData(chest, new GemData { SlotIndex = (uint)i, IsChest = 1 });
+                em.SetComponentEnabled<GemActiveTag>(chest, false);
+                gemPoolSingleton.AllChests.Add(new ArtifactChest { Entity = chest });
+                gemPoolSingleton.FreeChests.Enqueue(chest);
+            }
+            preallocatedChests.Dispose();
 
             var gemPoolEntity = em.CreateEntity();
             em.AddComponentData(gemPoolEntity, gemPoolSingleton);
@@ -202,8 +215,10 @@ namespace GameHolder.PureDots
             var runEntity = em.CreateEntity();
             em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1,
                 Loadout = RewardRoll.StartingLoadout(), Rewards = new RewardSelection { RandomState = RewardRoll.SeedForRun(ref rewards.Value, 1) },
+                ArtifactRandomState = ArtifactRoll.SeedForRun(ref rewards.Value, 1),
                 PlayerCollisionRadius = startingPlayer.Stats.CollisionRadius });
-            em.AddComponentData(runEntity, new SimulationSnapshot { Player = startingPlayer.Stats, AutoAttack = 1, Generation = 1,
+            em.AddComponentData(runEntity, new SimulationSnapshot { Player = startingPlayer.Stats, FirstWeapon = startingPlayer.Weapon,
+                Loadout = RewardRoll.StartingLoadout(), AutoAttack = 1, Generation = 1,
                 WeaponCount = 1, WeaponCapacity = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog.Value.MaxWeapons });
             em.AddComponentData(runEntity, new SimulationJobFence());
             em.AddComponentData(em.CreateEntity(), new SimulationInput());
@@ -325,6 +340,8 @@ namespace GameHolder.PureDots
                 {
                     pool.AllGems.Dispose();
                 }
+                if (pool.FreeChests.IsCreated) pool.FreeChests.Dispose();
+                if (pool.AllChests.IsCreated) pool.AllChests.Dispose();
             }
 
             if (SystemAPI.HasSingleton<SimulationBridgeQueuesSingleton>())

@@ -14,6 +14,7 @@ namespace GameHolder.PureDots
         public float BaseDamage;
         public float ContactAttackInterval;
         public uint ExperienceValue;
+        public float ChestDropChance;
         public float SpawnThreshold;
         public float RetreatRange;
         public PlayerWeapon Weapon;

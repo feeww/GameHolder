@@ -25,6 +25,7 @@ namespace GameHolder.PureDots
         public float MagnetRadius;
         public float CurrentHealth;
         public float MaxHealth;
+        public float HealthRegeneration;
         public uint Experience;
         public uint Level;
         public byte IsDead;
