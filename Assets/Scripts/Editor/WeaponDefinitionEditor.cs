@@ -9,7 +9,9 @@ namespace GameHolder.PureDots.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            DrawPropertiesExcluding(serializedObject, "ProjectileSpeed", "ProjectileLifetime", "BlastRadius", "ProjectileCount", "SpreadAngle");
+            var stats = serializedObject.FindProperty("UpgradableStats");
+            if (stats != null) EditorGUILayout.PropertyField(stats);
+            DrawPropertiesExcluding(serializedObject, "UpgradableStats", "ProjectileSpeed", "ProjectileLifetime", "BlastRadius", "ProjectileCount", "SpreadAngle");
             var type = serializedObject.FindProperty("Type");
             bool mixed = type.hasMultipleDifferentValues;
             if (!mixed && type.intValue != (int)WeaponType.Laser)

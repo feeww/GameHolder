@@ -15,6 +15,8 @@ namespace GameHolder.PureDots
         public CharacterWeaponDefinition Weapon;
         public Texture2D Texture;
         public Color Tint = Color.white;
+        [Tooltip("Stats this character can receive in level-up rewards. Also filtered by the bootstrap's reward settings.")]
+        public CharacterUpgradeStats UpgradableStats = CharacterUpgradeStats.All;
 
         public StartingPlayerConfig ToConfig(CharacterWeaponDefinition weaponOverride = null)
         {

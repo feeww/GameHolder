@@ -75,9 +75,9 @@ namespace GameHolder.PureDots
     {
         public const int SortingOrder = 100;
         public const float FirstControlY = 40, ControlSpacing = 34, DeathRestartY = 106;
-        public static Vector2 StatsPanelSize => new Vector2(310, 282);
+        public static Vector2 StatsPanelSize => new Vector2(310, 306);
         public static Vector2 StatsPanelPosition => new Vector2(10, 10);
-        public static Vector2 StatsTextSize => new Vector2(286, 270);
+        public static Vector2 StatsTextSize => new Vector2(286, 294);
         public static Vector2 StatsTextPosition => new Vector2(12, 10);
         public static Vector2 ControlsPanelSize => new Vector2(235, 315);
         public static Vector2 ControlsPanelPosition => new Vector2(-245, 10);

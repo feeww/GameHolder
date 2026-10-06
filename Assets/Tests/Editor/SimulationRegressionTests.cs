@@ -50,6 +50,10 @@ namespace GameHolder.PureDots.Tests
             { PlayerPrefab = player, EnemyPrefab = enemy, PlayerProjPrefab = playerProjectile, EnemyProjPrefab = enemyProjectile, GemPrefab = gem });
             var startingPlayer = DefaultPlayer;
             m_Em.AddComponentData(m_Em.CreateEntity(), startingPlayer);
+            var character = UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterDefinition>("Assets/GameData/Characters/DefaultCharacter.asset");
+            // Existing combat checks do not open reward prompts; progression checks opt into a lower threshold.
+            var rewardSettings = new RewardSettings { ExperiencePerLevel = int.MaxValue };
+            m_Em.AddComponentData(m_Em.CreateEntity(), new RewardCatalogSingleton { Catalog = rewardSettings.BuildCatalog(character, character.Weapon) });
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<EnemyConfigCatalog>();
             var names = new[] { "Tank", "Runner", "Skirmisher", "Sniper" };
@@ -103,6 +107,121 @@ namespace GameHolder.PureDots.Tests
             m_Em.GetComponentData<SimulationJobFence>(m_Run).Handle.Complete();
         }
         private SimulationSnapshot Snapshot => m_Em.GetComponentData<SimulationSnapshot>(m_Run);
+        [TestCase(false)] [TestCase(true)]
+        public void RewardSequenceChangesOnRestartUnlessFixedSeedIsEnabled(bool fixedSeed)
+        {
+            var catalog = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog;
+            byte previousMode = catalog.Value.UseFixedSeed;
+            try
+            {
+                catalog.Value.UseFixedSeed = (byte)(fixedSeed ? 1 : 0);
+                var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                run.Rewards.RandomState = RewardRoll.SeedForRun(ref catalog.Value, run.Generation);
+                uint previousSeed = run.Rewards.RandomState;
+                m_Em.SetComponentData(m_Run, run);
+                Command(SimulationCommandKind.Restart); Tick();
+                run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                Assert.That(run.Rewards.RandomState, Is.EqualTo(RewardRoll.SeedForRun(ref catalog.Value, run.Generation)));
+                Assert.That(run.Rewards.RandomState == previousSeed, Is.EqualTo(fixedSeed));
+            }
+            finally { catalog.Value.UseFixedSeed = previousMode; }
+        }
+        [TestCase(2)] [TestCase(5)]
+        public void LevelUpsQueueChoicesPauseCombatRejectRepeatedClicksAndRestartClearsRewards(int choices)
+        {
+            var catalog = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog;
+            uint previousThreshold = catalog.Value.ExperiencePerLevel;
+            int previousChoices = catalog.Value.ChoicesPerLevel;
+            try
+            {
+                catalog.Value.ExperiencePerLevel = 50;
+                catalog.Value.ChoicesPerLevel = choices;
+                Entity enemy = Enemy(new float2(20, 0));
+                Entity projectile = Projectile(new float2(10, 10), new float2(1, 0), true);
+                var stats = m_Em.GetComponentData<PlayerStats>(m_Player); stats.Experience = 150; m_Em.SetComponentData(m_Player, stats);
+                Tick();
+                Assert.That(Snapshot.Player.Level, Is.EqualTo(3));
+                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
+                Assert.That(Snapshot.Rewards.Active, Is.EqualTo(1)); Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(2));
+                Assert.That(Snapshot.Rewards.Choices.Length, Is.EqualTo(choices));
+                var enemyPosition = m_Em.GetComponentData<LocalTransform>(enemy).Position;
+                var projectilePosition = m_Em.GetComponentData<LocalTransform>(projectile).Position;
+                var lifetime = m_Em.GetComponentData<ProjectileData>(projectile).RemainingLifetime;
+                var waveTimer = m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).Timer;
+                m_Em.SetComponentData(m_Input, new SimulationInput { Movement = new float2(1, 0) });
+                Tick(1);
+                Assert.That(Snapshot.PlayerPosition, Is.EqualTo(float2.zero));
+                Assert.That(m_Em.GetComponentData<LocalTransform>(enemy).Position, Is.EqualTo(enemyPosition));
+                Assert.That(m_Em.GetComponentData<LocalTransform>(projectile).Position, Is.EqualTo(projectilePosition));
+                Assert.That(m_Em.GetComponentData<ProjectileData>(projectile).RemainingLifetime, Is.EqualTo(lifetime));
+                Assert.That(m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).Timer, Is.EqualTo(waveTimer));
+                var select = new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = choices - 1,
+                    Generation = Snapshot.Generation, PromptId = Snapshot.Rewards.PromptId };
+                m_Commands.Enqueue(select); m_Commands.Enqueue(select); Tick();
+                Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(1));
+                Assert.That(Snapshot.Rewards.PromptId, Is.EqualTo(select.PromptId + 1));
+                Assert.That(Snapshot.PlayerPosition, Is.EqualTo(float2.zero));
+                select.PromptId = Snapshot.Rewards.PromptId; m_Commands.Enqueue(select); Tick();
+                Assert.That(Snapshot.Rewards.Active, Is.Zero); Assert.That(Snapshot.Rewards.Pending, Is.Zero);
+                Assert.That(Snapshot.PlayerPosition.x, Is.GreaterThan(0));
+                Command(SimulationCommandKind.Restart); Tick();
+                var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                Assert.That(run.Loadout.Count, Is.EqualTo(1)); Assert.That(run.Loadout.FirstBonuses.Damage, Is.Zero);
+                Assert.That(run.Rewards.Active, Is.Zero); Assert.That(run.Rewards.Pending, Is.Zero);
+                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
+            }
+            finally { catalog.Value.ExperiencePerLevel = previousThreshold; catalog.Value.ChoicesPerLevel = previousChoices; }
+        }
+        [TestCase(false)] [TestCase(true)]
+        public void PausedKillAllCoalescesUntilResumeAndRestartDiscardsIt(bool restart)
+        {
+            Enemy(new float2(20, 0)); Enemy(new float2(20, 1));
+            var catalog = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog;
+            var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+            run.Rewards.Pending = 1; RewardRoll.Open(ref run.Rewards, run.Loadout, ref catalog.Value);
+            m_Em.SetComponentData(m_Run, run);
+            var damage = m_Em.CreateEntityQuery(typeof(DamageEventQueueSingleton)).GetSingleton<DamageEventQueueSingleton>().DamageQueue;
+            for (int tick = 0; tick < 3; tick++)
+            {
+                for (int i = 0; i < SimulationConstants.CommandQueueCapacity; i++) Command(SimulationCommandKind.KillAll);
+                Tick();
+                Assert.That(damage.Count, Is.Zero);
+                Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(2));
+                Assert.That(m_Em.GetComponentData<SimulationRunState>(m_Run).KillAllPending, Is.EqualTo(1));
+            }
+            if (restart) Command(SimulationCommandKind.Restart);
+            else m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = 0,
+                PromptId = Snapshot.Rewards.PromptId, Generation = Snapshot.Generation });
+            Tick();
+            Assert.That(Snapshot.ActiveEnemies, Is.Zero);
+            Assert.That(Snapshot.Kills, Is.EqualTo(restart ? 0 : 2));
+            Assert.That(damage.Count, Is.Zero);
+            Assert.That(m_Em.GetComponentData<SimulationRunState>(m_Run).KillAllPending, Is.Zero);
+            Tick(); Assert.That(Snapshot.Kills, Is.EqualTo(restart ? 0 : 2));
+        }
+
+        [TestCase(WeaponType.Standard)] [TestCase(WeaponType.Explosive)] [TestCase(WeaponType.Laser)]
+        public void SecondWeaponFiresWithIndependentCooldownUsingItsOwnWeaponType(WeaponType type)
+        {
+            var first = TestWeapon(WeaponType.Standard); first.Interval = .2f; first.Lifetime = 10;
+            m_Em.SetComponentData(m_Player, first);
+            var second = TestWeapon(type); second.Interval = .5f; second.Lifetime = 10;
+            var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+            run.Loadout.Count = 2; run.Loadout.SecondBase = run.Loadout.SecondWeapon = second;
+            m_Em.SetComponentData(m_Run, run);
+            Command(SimulationCommandKind.AutoAttack, 1); Tick(.25f);
+            Assert.That(Snapshot.PlayerProjectiles, Is.EqualTo(first.Count));
+            Tick(.25f);
+            Assert.That(Snapshot.PlayerProjectiles, Is.EqualTo(first.Count * 2 + (type == WeaponType.Standard ? second.Count : 1)));
+            using var projectiles = m_Em.CreateEntityQuery(typeof(PlayerProjectileTag), typeof(ProjectileActiveTag)).ToEntityArray(Allocator.Temp);
+            int specialCount = 0;
+            foreach (var projectile in projectiles)
+            {
+                if (type == WeaponType.Explosive && m_Em.IsComponentEnabled<ExplosiveProjectile>(projectile)) specialCount++;
+                if (type == WeaponType.Laser && m_Em.IsComponentEnabled<LaserBeam>(projectile)) specialCount++;
+            }
+            Assert.That(specialCount, Is.EqualTo(type == WeaponType.Standard ? 0 : 1));
+        }
         private Entity Enemy(float2 position, uint type = 1)
         {
             var pool = m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>();

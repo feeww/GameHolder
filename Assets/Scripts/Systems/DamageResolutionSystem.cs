@@ -25,6 +25,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
+            if (run.Rewards.Active != 0) return;
             Damage.Clear();
             // Area weapons stage at most one event per enemy, regardless of overlapping shots.
             foreach (var entry in AreaDamage)

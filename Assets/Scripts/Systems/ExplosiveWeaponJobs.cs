@@ -8,24 +8,6 @@ using Unity.Transforms;
 namespace GameHolder.PureDots
 {
     [BurstCompile]
-    public struct ExplosiveAttackJob : IJob
-    {
-        public SimulationAccess A;
-        public void Execute()
-        {
-            var run = A.Run[A.State]; var weapon = A.Weapons[run.Player];
-            if (run.WeaponReady == 0 || weapon.Type != WeaponType.Explosive) return;
-            Entity projectile = WeaponFire.Projectile(A, ref run, run.Aim, weapon);
-            if (projectile != Entity.Null)
-            {
-                A.Explosives[projectile] = new ExplosiveProjectile { BlastRadius = weapon.BlastRadius };
-                A.Explosives.SetComponentEnabled(projectile, true);
-            }
-            A.Run[A.State] = run;
-        }
-    }
-
-    [BurstCompile]
     public struct ExplosiveCombatJob : IJob
     {
         public SimulationAccess A;
@@ -33,6 +15,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
+            if (run.Rewards.Active != 0) return;
             for (int i = 0; i < A.PlayerPool.AllProjectiles.Length; i++)
             {
                 Entity projectile = A.PlayerPool.AllProjectiles[i];

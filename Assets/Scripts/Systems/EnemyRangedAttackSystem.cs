@@ -13,6 +13,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
+            if (run.Rewards.Active != 0) return;
             if (A.Stats[run.Player].IsDead != 0) return;
             for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
             {

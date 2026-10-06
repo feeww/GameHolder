@@ -26,7 +26,7 @@ namespace GameHolder.PureDots
         {
             if (m_Initialized) return;
             if (!SystemAPI.HasSingleton<PureDotsPrefabsSingleton>() || !SystemAPI.HasSingleton<StartingPlayerConfig>() ||
-                !SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>()) return;
+                !SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>() || !SystemAPI.HasSingleton<RewardCatalogSingleton>()) return;
             m_Initialized = true;
 
             var prefabs = SystemAPI.GetSingleton<PureDotsPrefabsSingleton>();
@@ -194,13 +194,17 @@ namespace GameHolder.PureDots
 
             // 11. Instantiate Player Entity (Prefab already contains default transform, velocity, stats, and invulnerability)
             var startingPlayer = SystemAPI.GetSingleton<StartingPlayerConfig>();
+            var rewards = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog;
             var player = em.Instantiate(prefabs.PlayerPrefab);
             em.SetComponentData(player, startingPlayer.Stats);
             em.SetComponentData(player, startingPlayer.Weapon);
             em.SetComponentData(player, new PlayerInvulnerability { InvulnerabilityDuration = startingPlayer.InvulnerabilityDuration });
             var runEntity = em.CreateEntity();
-            em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1, PlayerCollisionRadius = startingPlayer.Stats.CollisionRadius });
-            em.AddComponentData(runEntity, new SimulationSnapshot { Player = startingPlayer.Stats, AutoAttack = 1, Generation = 1 });
+            em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1,
+                Loadout = RewardRoll.StartingLoadout(), Rewards = new RewardSelection { RandomState = RewardRoll.SeedForRun(ref rewards.Value, 1) },
+                PlayerCollisionRadius = startingPlayer.Stats.CollisionRadius });
+            em.AddComponentData(runEntity, new SimulationSnapshot { Player = startingPlayer.Stats, AutoAttack = 1, Generation = 1,
+                WeaponCount = 1, WeaponCapacity = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog.Value.MaxWeapons });
             em.AddComponentData(runEntity, new SimulationJobFence());
             em.AddComponentData(em.CreateEntity(), new SimulationInput());
             em.AddComponentData(em.CreateEntity(), new SimulationCommandQueue { Commands = new UnsafeQueue<SimulationCommand>(Allocator.Persistent) });
@@ -210,6 +214,11 @@ namespace GameHolder.PureDots
         public void OnDestroy(ref SystemState state)
         {
             state.EntityManager.CompleteAllTrackedJobs();
+            if (SystemAPI.HasSingleton<RewardCatalogSingleton>())
+            {
+                var rewards = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog;
+                if (rewards.IsCreated) rewards.Dispose();
+            }
             if (SystemAPI.HasSingleton<SimulationCommandQueue>()) SystemAPI.GetSingleton<SimulationCommandQueue>().Commands.Dispose();
             if (SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>())
             {

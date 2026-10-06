@@ -23,3 +23,4 @@ MonoBehaviour:
   ProjectileCount: 1
   SpreadAngle: 0
   Tint: {r: 1, g: 0.2, b: 0.2, a: 1}
+  UpgradableStats: 63

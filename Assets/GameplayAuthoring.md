@@ -26,6 +26,37 @@
 5. Add enemy assets to the bootstrap's **Enemy Types** list. This list is the complete
    spawning roster; **Spawn Weight** controls relative frequency. At least one enemy asset
    must be assigned. Empty slots are ignored. Missing required references appear as Inspector errors.
+6. Expand **Rewards** on the bootstrap to configure level-up selection: **Choices Per Level**
+   (1–8, default 2), weapon capacity (1–2), independent **New Weapon Chance** per slot
+   (default 50%), XP per level, available character weapons, and target weights. Normal runs use
+   fresh random seeds. Enable **Use Fixed Seed** and set **Random Seed** to reproduce
+   a particular reward sequence on every run.
+   The starting weapon is included automatically; owned weapons and repeated roster
+   assets are excluded from new-weapon rolls. Weapon cards offer different unowned assets
+   before repeating any offered weapon. An empty/exhausted roster offers stats.
+   Each level costs `current level × Experience Per Level` XP. Every earned level queues
+   one prompt with the configured number of choices; choose one by clicking or pressing
+   the card's number (**1–8**). Larger prompts use additional rows.
+   Combat and movement pause until all queued prompts are resolved. Restart restores
+   the starting weapon and stats, and starts a new reward sequence unless **Use Fixed Seed** is enabled.
+7. Select a character or a **For Character** weapon asset and edit **Upgradable Stats**
+   to enable or disable individual stats for that asset. The bootstrap's **Character Stats**
+   is an additional filter for character upgrades. Weapon upgrades use only each weapon's
+   **Upgradable Stats**, including newly acquired weapons.
+8. Expand **Rewards > Rarities** and add, remove, or reorder entries to create reward tiers.
+   Each entry exposes **Name**, relative **Weight**, **Bonus Percent**, and **Color**.
+   Common / Rare / Epic default to weights 70 / 25 / 5 and bonuses 5 / 10 / 15.
+   Probability is `tier weight / sum of all tier weights`; weight zero disables a tier.
+   Existing scenes preserve their configured three tiers when migrated to this list.
+   Weapon cards always use neutral
+   styling. Bonuses add against the original stat: two +5% damage upgrades produce
+   `base damage × 1.10`; +10% attack rate gives `base interval / 1.10`.
+   Max-health upgrades also grant the added health; level-ups no longer grant automatic
+   health bonuses. Movement and projectile speed are never eligible. Blast radius applies
+   to Explosive weapons; projectile lifetime applies to Standard and Explosive weapons.
+   Zero damage/pickup radius are excluded. Stat-target pairs stay distinct until all eligible
+   pairs have been offered, then may repeat to fill **Choices Per Level**. Configuration requires
+   at least one usable stat on the character or starting weapon, with a positive target weight.
 
 For another scene, run **Pure DOTS > Setup Active Scene** to add the bootstrap.
 Assign its character and enemy roster before entering Play. Duplicate an existing
@@ -55,7 +86,7 @@ Engine limits and shared simulation rules remain under `Assets/Scripts/Configura
 - `CrowdConstants`: spatial hashing, distance tiers, pushing, and steering.
 - `CombatConstants`: shared contact tolerance, aiming, cooldown jitter, and cosmetic blast duration.
 - `RunDefaults`: waves and directional spawn settings.
-- `ProgressionConstants`: experience, level rewards, gem tiers, and recycling.
+- `ProgressionConstants`: default XP threshold, gem tiers, and recycling.
 - `NumericalConstants`: denominator guards and degenerate sweep tolerances.
 
 `Assets/Scripts/Presentation/Configuration` contains camera, render, HUD, audio,

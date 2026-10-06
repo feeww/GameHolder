@@ -12,6 +12,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
+            if (run.Rewards.Active != 0) return;
             for (int i = 0; i < A.PlayerPool.AllProjectiles.Length; i++)
             {
                 Entity projectile = A.PlayerPool.AllProjectiles[i];

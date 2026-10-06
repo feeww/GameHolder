@@ -38,6 +38,8 @@ namespace GameHolder.PureDots
             var character = settings.StartingCharacter;
             var startingPlayer = character.ToConfig(settings.StartingWeaponAsset);
             em.AddComponentData(em.CreateEntity(), startingPlayer);
+            em.AddComponentData(em.CreateEntity(), new RewardCatalogSingleton
+            { Catalog = settings.Rewards.BuildCatalog(character, settings.StartingWeaponAsset != null ? settings.StartingWeaponAsset : character.Weapon) });
 
             Mesh quadMesh = PureDotsAssetFactory.CreateBottomCenterQuadMesh();
             var projTex = PureDotsAssetFactory.GenerateProjectileTexture();

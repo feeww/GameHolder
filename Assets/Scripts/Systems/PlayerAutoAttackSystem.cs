@@ -14,12 +14,18 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
-            run.WeaponReady = 0;
-            if (run.AutoAttack == 0 || A.Stats[run.Player].IsDead != 0) { A.Run[A.State] = run; return; }
+            if (run.Rewards.Active != 0 || run.AutoAttack == 0 || A.Stats[run.Player].IsDead != 0) return;
             var weapon = A.Weapons[run.Player];
-            run.AttackTimer += Dt;
-            if (run.AttackTimer < weapon.Interval) { A.Run[A.State] = run; return; }
-            run.AttackTimer -= weapon.Interval;
+            Attack(ref run, weapon, ref run.AttackTimer);
+            if (run.Loadout.Count == PlayerLoadout.Capacity)
+                Attack(ref run, run.Loadout.SecondWeapon, ref run.Loadout.SecondAttackTimer);
+            A.Run[A.State] = run;
+        }
+        private void Attack(ref SimulationRunState run, PlayerWeapon weapon, ref float timer)
+        {
+            timer += Dt;
+            if (timer < weapon.Interval) return;
+            timer -= weapon.Interval;
             float closest = weapon.Range * weapon.Range; ulong bestKey = ulong.MaxValue;
             float2 target = run.PlayerPosition + new float2(math.cos(run.AngleCounter * CombatConstants.AutoAimAngleStep), math.sin(run.AngleCounter * CombatConstants.AutoAimAngleStep));
             float radius = weapon.Range;
@@ -37,19 +43,34 @@ namespace GameHolder.PureDots
                     } while (A.Grid.TryGetNextValue(out entry, ref iterator));
                 }
             float2 aim = math.normalizesafe(target - run.PlayerPosition, new float2(1, 0));
-            run.Aim = aim; run.WeaponReady = 1;
-            if (weapon.Type == WeaponType.Standard)
-            for (int i = 0; i < weapon.Count; i++)
-            {
-                float2 direction = WeaponFire.Direction(aim, i, weapon);
-                if (WeaponFire.Projectile(A, ref run, direction, weapon) == Entity.Null) break;
-            }
-            run.AngleCounter++; A.Run[A.State] = run;
+            WeaponFire.Fire(A, ref run, aim, weapon);
+            run.AngleCounter++;
         }
     }
 
     public static class WeaponFire
     {
+        public static void Fire(SimulationAccess a, ref SimulationRunState run, float2 aim, PlayerWeapon weapon)
+        {
+            int count = weapon.Type == WeaponType.Standard ? weapon.Count : 1;
+            for (int i = 0; i < count; i++)
+            {
+                float2 direction = weapon.Type == WeaponType.Standard ? Direction(aim, i, weapon) : aim;
+                Entity projectile = Projectile(a, ref run, direction, weapon);
+                if (projectile == Entity.Null) break;
+                if (weapon.Type == WeaponType.Explosive)
+                {
+                    a.Explosives[projectile] = new ExplosiveProjectile { BlastRadius = weapon.BlastRadius };
+                    a.Explosives.SetComponentEnabled(projectile, true);
+                }
+                else if (weapon.Type == WeaponType.Laser)
+                {
+                    a.Velocities[projectile] = default;
+                    a.Lasers[projectile] = new LaserBeam { Direction = aim, Length = weapon.Range, PendingHit = 1 };
+                    a.Lasers.SetComponentEnabled(projectile, true);
+                }
+            }
+        }
         public static Entity Projectile(SimulationAccess a, ref SimulationRunState run, float2 direction, PlayerWeapon weapon)
         {
             if (!a.PlayerPool.InactiveProjectiles.TryDequeue(out Entity projectile)) return Entity.Null;

@@ -12,14 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f8720c9b0a3bf3a4f977192283ace934, type: 3}
   m_Name: Weapon1
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyWeaponDefinition
-  Type: 2
+  Type: 1
   AttackInterval: 0.05
   Damage: 1.1111111e+10
   AttackRange: 64
   ProjectileRadius: 2
-  ProjectileSpeed: 16
+  ProjectileSpeed: 18.1
   ProjectileLifetime: 10
-  BlastRadius: 3
+  BlastRadius: 12
   ProjectileCount: 3
   SpreadAngle: 0.2
   Tint: {r: 1, g: 0.2, b: 0.2, a: 1}

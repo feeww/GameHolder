@@ -31,15 +31,31 @@ namespace GameHolder.PureDots
                         break;
                     case SimulationCommandKind.AutoAttack: run.AutoAttack = (byte)(command.Value != 0 ? 1 : 0); break;
                     case SimulationCommandKind.ForceRebase: run.ForceRebase = 1; break;
-                    case SimulationCommandKind.KillAll:
-                        for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
-                        {
-                            Entity e = A.EnemyPool.AllEnemies[i];
-                            if (A.Enemies.IsComponentEnabled(e)) A.Damage.Enqueue(new DamageEvent
-                            { TargetEntity = e, TargetKey = DamageEvent.CreateTargetKey(e), Damage = float.MaxValue });
-                        }
-                        break;
+                    case SimulationCommandKind.KillAll: run.KillAllPending = 1; break;
                     case SimulationCommandKind.Restart: Reset(ref run); break;
+                    case SimulationCommandKind.SelectReward:
+                        var rewardStats = A.Stats[run.Player];
+                        var rewardWeapon = A.Weapons[run.Player];
+                        if (RewardRoll.Select(ref run, ref rewardStats, ref rewardWeapon, A.StartingPlayer, ref A.Rewards.Value, command))
+                        { A.Stats[run.Player] = rewardStats; A.Weapons[run.Player] = rewardWeapon; }
+                        break;
+                }
+            }
+            if (run.Rewards.Active != 0)
+            {
+                run.PlayerVelocity = float2.zero;
+                A.Velocities[run.Player] = default;
+                A.Run[A.State] = run;
+                return;
+            }
+            if (run.KillAllPending != 0)
+            {
+                run.KillAllPending = 0;
+                for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+                {
+                    Entity e = A.EnemyPool.AllEnemies[i];
+                    if (A.Enemies.IsComponentEnabled(e)) A.Damage.Enqueue(new DamageEvent
+                    { TargetEntity = e, TargetKey = DamageEvent.CreateTargetKey(e), Damage = float.MaxValue });
                 }
             }
             var stats = A.Stats[run.Player];
@@ -100,7 +116,9 @@ namespace GameHolder.PureDots
             uint generation = run.Generation + 1;
             Entity player = run.Player;
             byte godMode = run.GodMode, autoAttack = run.AutoAttack;
-            run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack, PlayerCollisionRadius = A.StartingPlayer.Stats.CollisionRadius };
+            run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack,
+                Loadout = RewardRoll.StartingLoadout(), Rewards = new RewardSelection { RandomState = RewardRoll.SeedForRun(ref A.Rewards.Value, generation) },
+                PlayerCollisionRadius = A.StartingPlayer.Stats.CollisionRadius };
             A.Stats[player] = A.StartingPlayer.Stats;
             A.Weapons[player] = A.StartingPlayer.Weapon;
             A.Invulnerability[player] = new PlayerInvulnerability

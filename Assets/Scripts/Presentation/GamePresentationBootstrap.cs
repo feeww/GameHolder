@@ -16,6 +16,10 @@ namespace GameHolder.PureDots
         public CharacterWeaponDefinition StartingWeaponAsset => m_StartingWeaponAsset;
         public EnemyDefinition[] EnemyTypes => m_EnemyTypes;
 
+        [Header("Level-up Rewards")]
+        [SerializeField] private RewardSettings m_Rewards = new RewardSettings();
+        public RewardSettings Rewards => m_Rewards;
+
         [Header("Rendering & Camera")]
         [SerializeField] private Camera m_Camera;
         [SerializeField] private Material m_FloorMaterial;
@@ -116,6 +120,8 @@ namespace GameHolder.PureDots
                     { error = $"Ranged enemy '{enemy.name}' requires an enemy weapon asset."; return false; }
                 }
             if (!hasEnemy) { error = "Assign at least one enemy asset to Enemy Types."; return false; }
+            if (m_Rewards == null) { error = "Configure Level-up Rewards."; return false; }
+            if (!m_Rewards.TryValidate(m_StartingCharacter, m_StartingWeaponAsset != null ? m_StartingWeaponAsset : m_StartingCharacter.Weapon, out error)) return false;
             error = null; return true;
         }
 

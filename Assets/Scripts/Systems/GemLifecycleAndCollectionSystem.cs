@@ -12,6 +12,7 @@ namespace GameHolder.PureDots
         public void Execute()
         {
             var run = A.Run[A.State];
+            if (run.Rewards.Active != 0) return;
             var stats = A.Stats[run.Player];
             while (A.GemSpawns.TryDequeue(out var request))
             {
@@ -61,13 +62,13 @@ namespace GameHolder.PureDots
                     A.Gems.SetComponentEnabled(record.Entity, false); A.GemPool.FreeGems.Enqueue(record.Entity); run.ActiveGems--;
                 }
                 run.TotalExperience += gained; stats.Experience += gained;
-                uint required = stats.Level * ProgressionConstants.ExpPerLevelMultiplier;
+                ulong required = (ulong)stats.Level * A.Rewards.Value.ExperiencePerLevel;
                 while (required > 0 && stats.Experience >= required)
                 {
-                    stats.Experience -= required; stats.Level++; stats.MaxHealth += ProgressionConstants.HealthBonusPerLevel;
-                    stats.CurrentHealth = math.min(stats.MaxHealth, stats.CurrentHealth + ProgressionConstants.HealthHealPerLevel);
-                    required = stats.Level * ProgressionConstants.ExpPerLevelMultiplier;
+                    stats.Experience -= (uint)required; stats.Level++; run.Rewards.Pending++;
+                    required = (ulong)stats.Level * A.Rewards.Value.ExperiencePerLevel;
                 }
+                RewardRoll.Open(ref run.Rewards, run.Loadout, ref A.Rewards.Value);
                 A.Stats[run.Player] = stats;
             }
             A.Run[A.State] = run;
