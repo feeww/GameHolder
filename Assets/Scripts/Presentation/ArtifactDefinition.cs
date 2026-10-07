@@ -38,10 +38,13 @@ namespace GameHolder.PureDots
     {
         [Tooltip("Choose one artifact per chest. Offers are distinct; fewer cards appear when the eligible roster is smaller.")]
         [Range(1, RewardSelection.MaxChoices)] public int ChoicesPerChest = 2;
+        [Tooltip("Maximum artifact types blocked from chest drops per run. Zero disables blocking; Restart clears blocked types.")]
+        [Range(0, ArtifactInventory.Capacity)] public int MaxBlocksPerRun = 2;
         public bool TryValidate(System.Collections.Generic.IReadOnlyList<ArtifactDefinition> artifacts, RewardSettings rewards, out string error)
         {
-            if (ChoicesPerChest < 1 || ChoicesPerChest > RewardSelection.MaxChoices || rewards?.Rarities == null)
-            { error = $"Artifact chests require 1-{RewardSelection.MaxChoices} choices and shared rarities."; return false; }
+            if (ChoicesPerChest < 1 || ChoicesPerChest > RewardSelection.MaxChoices || MaxBlocksPerRun < 0 ||
+                MaxBlocksPerRun > ArtifactInventory.Capacity || rewards?.Rarities == null)
+            { error = $"Artifact chests require 1-{RewardSelection.MaxChoices} choices, 0-{ArtifactInventory.Capacity} blocks and shared rarities."; return false; }
             float total = 0;
             foreach (var tier in rewards.Rarities)
             {

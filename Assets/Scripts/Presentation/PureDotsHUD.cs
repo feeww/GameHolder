@@ -22,6 +22,9 @@ namespace GameHolder.PureDots
         private readonly BatchedHudText[] m_RewardLabels = new BatchedHudText[RewardSelection.MaxChoices];
         private readonly UnityEngine.UI.Button[] m_RewardButtons = new UnityEngine.UI.Button[RewardSelection.MaxChoices];
         private readonly UnityEngine.UI.RawImage[] m_RewardIcons = new UnityEngine.UI.RawImage[RewardSelection.MaxChoices];
+        private readonly UnityEngine.UI.Button[] m_BlockArtifactButtons = new UnityEngine.UI.Button[RewardSelection.MaxChoices];
+        private UnityEngine.UI.Button m_RerollButton;
+        private BatchedHudText m_RerollLabel;
         private readonly UnityEngine.UI.RawImage[] m_WeaponIcons = new UnityEngine.UI.RawImage[PlayerLoadout.Capacity];
         private readonly UnityEngine.UI.Button[] m_WeaponButtons = new UnityEngine.UI.Button[PlayerLoadout.Capacity];
         private readonly BatchedHudText[] m_WeaponLabels = new BatchedHudText[PlayerLoadout.Capacity];
@@ -87,7 +90,17 @@ namespace GameHolder.PureDots
                 m_RewardLabels[i] = RewardButton(rewards, new Vector2(15 + i % 2 * 295, 70 + i / 2 * 150),
                     "Choice " + (i + 1), () => ChooseReward(slot), out m_RewardButtons[i]);
                 m_RewardIcons[i] = WeaponIcon(m_RewardButtons[i].transform, new Vector2(46, 46));
+                var blockLabel = RewardButton(rewards, Vector2.zero, "Block artifact " + (i + 1),
+                    () => BlockArtifact(slot), out m_BlockArtifactButtons[i]);
+                ((RectTransform)m_BlockArtifactButtons[i].transform).sizeDelta = new Vector2(280, 30);
+                blockLabel.rectTransform.sizeDelta = new Vector2(260, 26);
+                blockLabel.rectTransform.anchoredPosition = new Vector2(10, -2);
+                blockLabel.SetText("Block this artifact");
             }
+            m_RerollLabel = RewardButton(rewards, Vector2.zero, "Reroll upgrades", RerollUpgrades, out m_RerollButton);
+            ((RectTransform)m_RerollButton.transform).sizeDelta = new Vector2(280, 32);
+            m_RerollLabel.rectTransform.sizeDelta = new Vector2(260, 28);
+            m_RerollLabel.rectTransform.anchoredPosition = new Vector2(10, -2);
             var details = Panel("Weapon details panel", root.transform, new Vector2(360, 340), new Vector2(-180, -170), new Vector2(.5f, .5f));
             m_WeaponDetailsPanel = details.gameObject;
             details.GetComponent<UnityEngine.UI.Image>().raycastTarget = true;
@@ -334,15 +347,30 @@ namespace GameHolder.PureDots
             button.onClick.AddListener(action);
             return Text("Label", rect, new Vector2(260, 130), new Vector2(10, 8), "");
         }
-        private void ChooseReward(int slot)
+        private void ChooseReward(int slot) => QueueRewardAction(SimulationCommandKind.SelectReward, slot);
+        private void BlockArtifact(int slot)
         {
-            if (!m_Bound || m_RewardQueued || m_Snapshot.InventoryOpen != 0 || m_Snapshot.Rewards.Active == 0 || slot < 0 ||
+            if (slot < 0 || slot >= m_Snapshot.Rewards.Choices.Length || m_Snapshot.Rewards.Choices[slot].Kind != RewardKind.Artifact ||
+                Unity.Mathematics.math.countbits(m_Snapshot.Inventory.BlockedArtifacts) >= m_Snapshot.MaxArtifactBlocks) return;
+            QueueRewardAction(SimulationCommandKind.BlockArtifact, slot);
+        }
+        private void RerollUpgrades()
+        {
+            if (m_Snapshot.Rewards.Choices.Length == 0 || m_Snapshot.Rewards.Choices[0].Kind == RewardKind.Artifact ||
+                m_Snapshot.Rewards.RerollsUsed >= m_Snapshot.MaxUpgradeRerolls) return;
+            QueueRewardAction(SimulationCommandKind.RerollUpgrades, 0);
+        }
+        private void QueueRewardAction(SimulationCommandKind kind, int slot)
+        {
+            if (!m_Bound || m_RewardQueued || m_Snapshot.Player.IsDead != 0 || m_Snapshot.InventoryOpen != 0 || m_Snapshot.Rewards.Active == 0 || slot < 0 ||
                 slot >= m_Snapshot.Rewards.Choices.Length || m_PendingCount >= m_Pending.Length) return;
-            m_Pending[m_PendingCount++] = new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = slot,
+            m_Pending[m_PendingCount++] = new SimulationCommand { Kind = kind, Value = slot,
                 PromptId = m_Snapshot.Rewards.PromptId, Generation = m_Snapshot.Generation };
             m_RewardQueued = true;
             CloseWeaponDetails();
-            for (int i = 0; i < m_RewardButtons.Length; i++) m_RewardButtons[i].interactable = false;
+            for (int i = 0; i < m_RewardButtons.Length; i++)
+            { m_RewardButtons[i].interactable = false; m_BlockArtifactButtons[i].interactable = false; }
+            m_RerollButton.interactable = false;
         }
         public void RespawnPlayer() => Enqueue(SimulationCommandKind.Restart);
         private void ToggleGod() => Enqueue(SimulationCommandKind.GodMode, m_Snapshot.GodMode == 0 ? 1 : 0);
@@ -406,23 +434,44 @@ namespace GameHolder.PureDots
             if (!opened && m_RewardPrompt == m_Snapshot.Rewards.PromptId && m_RewardGeneration == m_Snapshot.Generation) return;
             m_RewardPrompt = m_Snapshot.Rewards.PromptId; m_RewardGeneration = m_Snapshot.Generation; m_RewardQueued = false;
             int count = m_Snapshot.Rewards.Choices.Length;
-            float height = 70 + 150 * ((count + 1) / 2);
+            bool artifacts = count > 0 && m_Snapshot.Rewards.Choices[0].Kind == RewardKind.Artifact;
+            int blocksLeft = Mathf.Max(0, m_Snapshot.MaxArtifactBlocks - Unity.Mathematics.math.countbits(m_Snapshot.Inventory.BlockedArtifacts));
+            int rerollsLeft = Mathf.Max(0, m_Snapshot.MaxUpgradeRerolls - m_Snapshot.Rewards.RerollsUsed);
+            bool blocks = artifacts && blocksLeft > 0;
+            bool rerolls = !artifacts && rerollsLeft > 0;
+            float spacing = blocks ? 186 : 150;
+            float height = 70 + spacing * ((count + 1) / 2) + (rerolls ? 42 : 0);
             var rect = (RectTransform)m_RewardPanel.transform;
             rect.sizeDelta = new Vector2(610, height);
             float scale = Mathf.Min(1, (Screen.height - 20f) / height, (Screen.width - 20f) / 610);
             rect.localScale = Vector3.one * scale;
             rect.anchoredPosition = new Vector2(-305 * scale, height / 2 * scale);
+            m_RerollButton.gameObject.SetActive(rerolls);
+            m_RerollButton.interactable = rerollsLeft > 0;
+            ((RectTransform)m_RerollButton.transform).anchoredPosition = new Vector2(165, -height + 42);
+            m_RerollButton.navigation = new Navigation { mode = Navigation.Mode.Explicit,
+                selectOnUp = count > 0 ? m_RewardButtons[(count - 1) / 2 * 2] : null };
+            m_Length = 0; Append("Reroll ("); AppendNumber((ulong)rerollsLeft); Append(" left)"); m_RerollLabel.SetText(m_Text, m_Length);
             for (int i = 0; i < m_RewardButtons.Length; i++)
             {
                 var button = m_RewardButtons[i];
                 button.gameObject.SetActive(i < count);
+                var block = m_BlockArtifactButtons[i];
+                block.gameObject.SetActive(blocks && i < count);
                 if (i >= count) continue;
+                ((RectTransform)button.transform).anchoredPosition = new Vector2(15 + i % 2 * 295, -70 - i / 2 * spacing);
+                ((RectTransform)block.transform).anchoredPosition = new Vector2(15 + i % 2 * 295, -216 - i / 2 * spacing);
+                block.interactable = blocksLeft > 0;
+                block.navigation = new Navigation { mode = Navigation.Mode.Explicit, selectOnUp = button,
+                    selectOnLeft = i % 2 == 1 ? m_BlockArtifactButtons[i - 1] : null,
+                    selectOnRight = i % 2 == 0 && i + 1 < count ? m_BlockArtifactButtons[i + 1] : null,
+                    selectOnDown = i + 2 < count ? m_RewardButtons[i + 2] : null };
                 button.interactable = true;
                 button.navigation = new Navigation { mode = Navigation.Mode.Explicit,
                     selectOnLeft = i % 2 == 1 ? m_RewardButtons[i - 1] : null,
                     selectOnRight = i % 2 == 0 && i + 1 < count ? m_RewardButtons[i + 1] : null,
                     selectOnUp = i >= 2 ? m_RewardButtons[i - 2] : null,
-                    selectOnDown = i + 2 < count ? m_RewardButtons[i + 2] : null };
+                    selectOnDown = blocks ? block : i + 2 < count ? m_RewardButtons[i + 2] : rerolls ? m_RerollButton : null };
                 RewardText(m_RewardLabels[i], m_Snapshot.Rewards.Choices[i], (uint)i + 1);
                 var choice = m_Snapshot.Rewards.Choices[i];
                 if (choice.Kind == RewardKind.Artifact)
@@ -435,9 +484,15 @@ namespace GameHolder.PureDots
                 m_RewardLabels[i].rectTransform.sizeDelta = new Vector2(icon ? 174 : 260, 130);
                 m_RewardLabels[i].rectTransform.anchoredPosition = new Vector2(icon ? 96 : 10, -8);
             }
-            m_RewardTitle.SetText(count > 0 && m_Snapshot.Rewards.Choices[0].Kind == RewardKind.Artifact
-                ? "ARTIFACT CHEST - CHOOSE ONE\nClick a card or its image, or press its number, to collect."
-                : "LEVEL UP - CHOOSE ONE\nClick a card or its image, or press its number, to select.");
+            m_Length = 0;
+            if (blocks)
+            {
+                Append("ARTIFACT CHEST - CHOOSE ONE\nBlocks left: "); AppendNumber((ulong)blocksLeft);
+                Append(". Block excludes this type for the rest of the run.");
+            }
+            else if (artifacts) Append("ARTIFACT CHEST - CHOOSE ONE\nClick a card or its image, or press its number, to collect.");
+            else Append("LEVEL UP - CHOOSE ONE\nClick a card or its image, or press its number, to select.");
+            m_RewardTitle.SetText(m_Text, m_Length);
             if (count > 0 && EventSystem.current != null) EventSystem.current.SetSelectedGameObject(m_RewardButtons[0].gameObject);
         }
         private void RewardText(BatchedHudText label, RewardChoice choice, uint slot)

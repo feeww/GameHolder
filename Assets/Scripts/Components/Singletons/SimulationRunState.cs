@@ -9,7 +9,7 @@ namespace GameHolder.PureDots
     public struct PreviousPosition : IComponentData { public float2 Value; }
     public struct EnemyRangedTag : IComponentData, IEnableableComponent { }
     public struct SimulationInput : IComponentData { public float2 Movement; }
-    public enum SimulationCommandKind : byte { SpawnExtra, KillAll, ForceRebase, GodMode, AutoAttack, Restart, SelectReward, Inventory }
+    public enum SimulationCommandKind : byte { SpawnExtra, KillAll, ForceRebase, GodMode, AutoAttack, Restart, SelectReward, Inventory, BlockArtifact, RerollUpgrades }
     public struct SimulationCommand { public SimulationCommandKind Kind; public int Value; public uint PromptId, Generation; }
     public struct SimulationCommandQueue : IComponentData { public UnsafeQueue<SimulationCommand> Commands; }
     // The only hand-off to managed consumers. Jobs never access this component.
@@ -41,6 +41,7 @@ namespace GameHolder.PureDots
         public uint PendingChests;
         public byte InventoryOpen;
         public int WeaponCount, WeaponCapacity;
+        public int MaxArtifactBlocks, MaxUpgradeRerolls;
         public float2 PlayerPosition;
         public double2 WorldOrigin;
         public uint Generation, Kills;

@@ -16,6 +16,7 @@ namespace GameHolder.PureDots
                 FirstWeapon = A.Weapons[run.Player], Loadout = run.Loadout,
                 Inventory = run.Inventory, InventoryOpen = run.InventoryOpen, PendingChests = run.PendingChests,
                 Rewards = run.Rewards, WeaponCount = run.Loadout.Count, WeaponCapacity = A.Rewards.Value.MaxWeapons,
+                MaxArtifactBlocks = A.Rewards.Value.MaxArtifactBlocks, MaxUpgradeRerolls = A.Rewards.Value.MaxUpgradeRerolls,
                 Generation = run.Generation, Kills = run.Kills, TotalExperience = run.TotalExperience,
                 ActiveEnemies = run.ActiveEnemies, PlayerProjectiles = run.PlayerProjectiles,
                 EnemyProjectiles = run.EnemyProjectiles, ActiveGems = run.ActiveGems, GodMode = run.GodMode, AutoAttack = run.AutoAttack

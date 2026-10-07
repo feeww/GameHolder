@@ -237,6 +237,71 @@ namespace GameHolder.PureDots.Tests
             Assert.That(Snapshot.Rewards.Active, Is.Zero); Assert.That(Snapshot.Rewards.Pending, Is.Zero);
             Assert.That(Snapshot.Inventory.Items.Length, Is.EqualTo(2));
         }
+        [TestCase(0, 0)] [TestCase(1, 1)] [TestCase(2, 5)] [TestCase(3, 7)]
+        public void RewardActionsEnforcePerRunLimitsRejectStaleCommandsAndReset(int blocks, int rerolls)
+        {
+            var catalog = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog;
+            int previousBlocks = catalog.Value.MaxArtifactBlocks, previousRerolls = catalog.Value.MaxUpgradeRerolls;
+            try
+            {
+                catalog.Value.MaxArtifactBlocks = blocks; catalog.Value.MaxUpgradeRerolls = rerolls;
+                var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                run.PendingChests = 2; run.Rewards.Pending = 2;
+                ArtifactRoll.Open(ref run, ref catalog.Value);
+                int owned = run.Rewards.Choices[0].ArtifactIndex;
+                run.Inventory.Add(owned, 1, catalog.Value.Artifacts[owned]);
+                m_Em.SetComponentData(m_Run, run); Tick(0);
+                Assert.That(Snapshot.MaxArtifactBlocks, Is.EqualTo(blocks)); Assert.That(Snapshot.MaxUpgradeRerolls, Is.EqualTo(rerolls));
+                for (int i = 0; i <= blocks; i++)
+                {
+                    var command = new SimulationCommand { Kind = SimulationCommandKind.BlockArtifact, Value = 0,
+                        Generation = Snapshot.Generation, PromptId = Snapshot.Rewards.PromptId };
+                    uint before = Snapshot.Inventory.BlockedArtifacts;
+                    var stale = command; stale.Generation--; m_Commands.Enqueue(stale);
+                    stale = command; stale.PromptId--; m_Commands.Enqueue(stale); Tick(0);
+                    Assert.That(Snapshot.Inventory.BlockedArtifacts, Is.EqualTo(before));
+                    int index = Snapshot.Rewards.Choices[0].ArtifactIndex;
+                    m_Commands.Enqueue(command); m_Commands.Enqueue(command); Tick(0);
+                    Assert.That(math.countbits(Snapshot.Inventory.BlockedArtifacts), Is.EqualTo(math.min(i + 1, blocks)));
+                    Assert.That(Snapshot.Inventory.Items[0].Index, Is.EqualTo(owned)); Assert.That(Snapshot.Inventory.Items[0].Quantity, Is.EqualTo(1));
+                    Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(2));
+                    if (i < blocks)
+                    {
+                        Assert.That(Snapshot.Rewards.PromptId, Is.EqualTo(command.PromptId + 1));
+                        Assert.That(Snapshot.Inventory.BlockedArtifacts & (1u << index), Is.Not.Zero);
+                    }
+                    foreach (var choice in Snapshot.Rewards.Choices)
+                        if (choice.Kind == RewardKind.Artifact) Assert.That(Snapshot.Inventory.BlockedArtifacts & (1u << choice.ArtifactIndex), Is.Zero);
+                }
+                Assert.That(Snapshot.PendingChests, Is.EqualTo(blocks == 3 ? 0u : 2u));
+                run = m_Em.GetComponentData<SimulationRunState>(m_Run);
+                run.PendingChests = 0; run.Rewards.Active = 0;
+                RewardRoll.Open(ref run.Rewards, run.Loadout, ref catalog.Value); m_Em.SetComponentData(m_Run, run); Tick(0);
+                for (int i = 0; i <= rerolls; i++)
+                {
+                    var command = new SimulationCommand { Kind = SimulationCommandKind.RerollUpgrades,
+                        Generation = Snapshot.Generation, PromptId = Snapshot.Rewards.PromptId };
+                    var stale = command; stale.Generation--; m_Commands.Enqueue(stale);
+                    stale = command; stale.PromptId--; m_Commands.Enqueue(stale); Tick(0);
+                    Assert.That(Snapshot.Rewards.RerollsUsed, Is.EqualTo(i));
+                    m_Commands.Enqueue(command); m_Commands.Enqueue(command); Tick(0);
+                    Assert.That(Snapshot.Rewards.RerollsUsed, Is.EqualTo(math.min(i + 1, rerolls)));
+                    Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(2)); Assert.That(Snapshot.Rewards.Active, Is.EqualTo(1));
+                    Assert.That(Snapshot.Rewards.PromptId, Is.EqualTo(command.PromptId + (i < rerolls ? 1u : 0u)));
+                    Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
+                }
+                m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = 0,
+                    Generation = Snapshot.Generation, PromptId = Snapshot.Rewards.PromptId }); Tick(0);
+                Assert.That(Snapshot.Rewards.Pending, Is.EqualTo(1)); Assert.That(Snapshot.Rewards.RerollsUsed, Is.EqualTo(rerolls));
+                Command(SimulationCommandKind.Restart); Tick(0);
+                Assert.That(Snapshot.Rewards.RerollsUsed, Is.Zero); Assert.That(Snapshot.Inventory.BlockedArtifacts, Is.Zero);
+                run = m_Em.GetComponentData<SimulationRunState>(m_Run); run.PendingChests = 1;
+                ArtifactRoll.Open(ref run, ref catalog.Value);
+                Assert.That(run.Rewards.Choices.Length, Is.EqualTo(3));
+            }
+            finally { catalog.Value.MaxArtifactBlocks = previousBlocks; catalog.Value.MaxUpgradeRerolls = previousRerolls; }
+        }
+
         [TestCase(false)] [TestCase(true)]
         public void RewardAndArtifactSequencesChangeOnRestartUnlessFixedSeedIsEnabled(bool fixedSeed)
         {

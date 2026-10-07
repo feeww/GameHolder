@@ -27,7 +27,7 @@ namespace GameHolder.PureDots
     }
     public struct RewardCatalog
     {
-        public int MaxWeapons, ChoicesPerLevel;
+        public int MaxWeapons, ChoicesPerLevel, MaxUpgradeRerolls, MaxArtifactBlocks;
         public uint ExperiencePerLevel, RandomSeed;
         public byte UseFixedSeed;
         public float NewWeaponChance, CharacterWeight, WeaponWeight;
@@ -59,6 +59,7 @@ namespace GameHolder.PureDots
         public const int MaxChoices = 8;
         public FixedList4096Bytes<RewardChoice> Choices;
         public uint Pending, PromptId, RandomState;
+        public int RerollsUsed;
         public byte Active;
     }
     [Serializable]
@@ -213,16 +214,31 @@ namespace GameHolder.PureDots
             return false;
         }
 
+        public static bool MatchesPrompt(SimulationRunState run, PlayerStats stats, SimulationCommand command)
+            => run.Rewards.Active != 0 && run.Rewards.Choices.Length > 0 && stats.IsDead == 0 &&
+                command.PromptId == run.Rewards.PromptId && command.Generation == run.Generation;
+
+        public static bool Reroll(ref SimulationRunState run, PlayerStats stats, ref RewardCatalog catalog, SimulationCommand command)
+        {
+            if (command.Kind != SimulationCommandKind.RerollUpgrades || !MatchesPrompt(run, stats, command) ||
+                run.InventoryOpen != 0 || run.Rewards.Pending == 0 || run.Rewards.Choices[0].Kind == RewardKind.Artifact ||
+                run.Rewards.RerollsUsed >= catalog.MaxUpgradeRerolls) return false;
+            run.Rewards.RerollsUsed++;
+            run.Rewards.Active = 0;
+            Open(ref run.Rewards, run.Loadout, ref catalog);
+            return true;
+        }
+
         public static bool Select(ref SimulationRunState run, ref PlayerStats stats, ref PlayerWeapon firstWeapon,
             StartingPlayerConfig baseline, ref RewardCatalog catalog, SimulationCommand command)
         {
-            if (command.Kind != SimulationCommandKind.SelectReward || run.Rewards.Active == 0 ||
-                stats.IsDead != 0 || command.Value < 0 || command.Value >= run.Rewards.Choices.Length ||
-                command.PromptId != run.Rewards.PromptId || command.Generation != run.Generation) return false;
+            if (command.Kind != SimulationCommandKind.SelectReward || !MatchesPrompt(run, stats, command) ||
+                command.Value < 0 || command.Value >= run.Rewards.Choices.Length) return false;
             var choice = run.Rewards.Choices[command.Value];
             if (choice.Kind == RewardKind.Artifact)
             {
-                if (run.PendingChests == 0 || choice.ArtifactIndex < 0 || choice.ArtifactIndex >= catalog.Artifacts.Length) return false;
+                if (run.PendingChests == 0 || choice.ArtifactIndex < 0 || choice.ArtifactIndex >= catalog.Artifacts.Length ||
+                    (run.Inventory.BlockedArtifacts & (1u << choice.ArtifactIndex)) != 0) return false;
                 run.Inventory.Add(choice.ArtifactIndex, 1, catalog.Artifacts[choice.ArtifactIndex]);
                 run.Inventory.Apply(ref stats, baseline.Stats, run.Loadout.CharacterBonuses);
             }

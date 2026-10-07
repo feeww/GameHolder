@@ -34,6 +34,8 @@ namespace GameHolder.PureDots
     {
         [Tooltip("Number of reward cards offered per earned level. The player selects one card per level.")]
         [Range(1, RewardSelection.MaxChoices)] public int ChoicesPerLevel = 2;
+        [Tooltip("Maximum level-up rerolls per run. Zero disables rerolling; Restart restores the allowance.")]
+        [Min(0)] public int MaxRerollsPerRun = 5;
         [Tooltip("Capacity can be reduced, but never exceeds two weapons.")]
         [Range(1, PlayerLoadout.Capacity)] public int MaxWeapons = 2;
         [Tooltip("Each slot independently rolls this chance. Full inventory or an exhausted weapon roster forces stat upgrades.")]
@@ -115,10 +117,10 @@ namespace GameHolder.PureDots
         {
             EnsureRarityIds();
             if (ChoicesPerLevel < 1 || ChoicesPerLevel > RewardSelection.MaxChoices ||
-                MaxWeapons < 1 || MaxWeapons > PlayerLoadout.Capacity || ExperiencePerLevel < 1 || UseFixedSeed && RandomSeed == 0 ||
+                MaxRerollsPerRun < 0 || MaxWeapons < 1 || MaxWeapons > PlayerLoadout.Capacity || ExperiencePerLevel < 1 || UseFixedSeed && RandomSeed == 0 ||
                 !FiniteNonnegative(NewWeaponChance) || NewWeaponChance > 1 || !FiniteNonnegative(CharacterTargetWeight) ||
                 !FiniteNonnegative(WeaponTargetWeight) || !math.isfinite(CharacterTargetWeight + PlayerLoadout.Capacity * WeaponTargetWeight))
-            { error = $"Rewards require 1-{RewardSelection.MaxChoices} choices, capacity 1-2, positive XP/seed and finite nonnegative weights."; return false; }
+            { error = $"Rewards require 1-{RewardSelection.MaxChoices} choices, nonnegative rerolls, capacity 1-2, positive XP/seed and finite nonnegative weights."; return false; }
             float totalWeight = 0;
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (Rarities != null)
@@ -176,7 +178,9 @@ namespace GameHolder.PureDots
             using var builder = new BlobBuilder(Allocator.Temp);
             ref var catalog = ref builder.ConstructRoot<RewardCatalog>();
             catalog.ChoicesPerLevel = ChoicesPerLevel;
+            catalog.MaxUpgradeRerolls = MaxRerollsPerRun;
             catalog.ArtifactChoicesPerChest = artifactChests.ChoicesPerChest;
+            catalog.MaxArtifactBlocks = artifactChests.MaxBlocksPerRun;
             catalog.MaxWeapons = MaxWeapons;
             catalog.NewWeaponChance = NewWeaponChance;
             catalog.ExperiencePerLevel = (uint)ExperiencePerLevel;

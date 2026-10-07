@@ -42,6 +42,10 @@ namespace GameHolder.PureDots
                         if (RewardRoll.Select(ref run, ref rewardStats, ref rewardWeapon, A.StartingPlayer, ref A.Rewards.Value, command))
                         { A.Stats[run.Player] = rewardStats; A.Weapons[run.Player] = rewardWeapon; }
                         break;
+                    case SimulationCommandKind.BlockArtifact:
+                        ArtifactRoll.Block(ref run, A.Stats[run.Player], ref A.Rewards.Value, command); break;
+                    case SimulationCommandKind.RerollUpgrades:
+                        RewardRoll.Reroll(ref run, A.Stats[run.Player], ref A.Rewards.Value, command); break;
                 }
             }
             if (run.Paused)

@@ -88,6 +88,10 @@ namespace GameHolder.PureDots.Tests
                 var artifacts = new[] { artifact };
                 var settings = new ArtifactChestSettings();
                 Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.True);
+                Assert.That(settings.MaxBlocksPerRun, Is.EqualTo(2));
+                settings.MaxBlocksPerRun = -1; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
+                settings.MaxBlocksPerRun = ArtifactInventory.Capacity + 1; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
+                settings.MaxBlocksPerRun = 0; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.True);
                 settings.ChoicesPerChest = 0; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
                 settings.ChoicesPerChest = 9; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
                 settings.ChoicesPerChest = 8; m_Settings.Rarities[0].Weight = float.NaN;
@@ -669,6 +673,12 @@ namespace GameHolder.PureDots.Tests
         [Test]
         public void InspectorValidationRejectsImpossibleRollsAndCatalogDeduplicatesAssets()
         {
+            Assert.That(m_Settings.MaxRerollsPerRun, Is.EqualTo(5));
+            Assert.That(m_Catalog.Value.MaxUpgradeRerolls, Is.EqualTo(5));
+            Assert.That(m_Catalog.Value.MaxArtifactBlocks, Is.EqualTo(2));
+            m_Settings.MaxRerollsPerRun = -1;
+            Assert.That(m_Settings.TryValidate(m_Character, m_Character.Weapon, out _), Is.False);
+            m_Settings.MaxRerollsPerRun = 0;
             m_Settings.CharacterStats = CharacterUpgradeStats.None; m_Settings.WeaponTargetWeight = 0;
             Assert.That(m_Settings.TryValidate(m_Character, m_Character.Weapon, out _), Is.False);
             m_Settings.CharacterStats = CharacterUpgradeStats.All;
@@ -688,6 +698,77 @@ namespace GameHolder.PureDots.Tests
             Assert.That(rewards.Choices[0].Kind, Is.EqualTo(RewardKind.StatUpgrade));
             Assert.That(rewards.Choices[1].Kind, Is.EqualTo(RewardKind.StatUpgrade));
         }
+        [Test]
+        public void RerollsAdvanceDeterministicRewardsWithoutSpendingLevelsOrArtifactRandomness()
+        {
+            var run = new SimulationRunState { Generation = 4, Loadout = RewardRoll.StartingLoadout(), ArtifactRandomState = 777,
+                Rewards = new RewardSelection { Pending = 2 } };
+            RewardRoll.Open(ref run.Rewards, run.Loadout, ref m_Catalog.Value);
+            var replay = run;
+            var command = new SimulationCommand { Kind = SimulationCommandKind.RerollUpgrades, PromptId = run.Rewards.PromptId, Generation = 4 };
+            uint previous = run.Rewards.RandomState;
+            Assert.That(RewardRoll.Reroll(ref run, m_Character.ToConfig().Stats, ref m_Catalog.Value, command), Is.True);
+            Assert.That(RewardRoll.Reroll(ref replay, m_Character.ToConfig().Stats, ref m_Catalog.Value, command), Is.True);
+            Assert.That(run.Rewards.RandomState, Is.Not.EqualTo(previous).And.EqualTo(replay.Rewards.RandomState));
+            Assert.That(run.Rewards.Pending, Is.EqualTo(2)); Assert.That(run.ArtifactRandomState, Is.EqualTo(777));
+            Assert.That(run.Rewards.RerollsUsed, Is.EqualTo(1)); Assert.That(run.Rewards.Active, Is.EqualTo(1));
+            for (int i = 0; i < run.Rewards.Choices.Length; i++)
+                Assert.That(run.Rewards.Choices[i], Is.EqualTo(replay.Rewards.Choices[i]));
+        }
+
+        [TestCase(false)] [TestCase(true)]
+        public void HudRewardActionsShowRemainingUsesAndQueueOnlyOnce(bool artifact)
+        {
+            var go = new GameObject("Reward actions test"); var commands = new UnsafeQueue<SimulationCommand>(Allocator.Temp);
+            try
+            {
+                var hud = go.AddComponent<PureDotsHUD>();
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                if (PureDotsHUD.Instance != hud) typeof(PureDotsHUD).GetMethod("Awake", flags).Invoke(hud, null);
+                hud.BindArtifacts(new[] { UnityEditor.AssetDatabase.LoadAssetAtPath<ArtifactDefinition>("Assets/GameData/Artifacts/VitalGauntlet.asset") }, null);
+                var snapshot = new SimulationSnapshot { Generation = 4, MaxArtifactBlocks = 2, MaxUpgradeRerolls = 5,
+                    PendingChests = artifact ? 1u : 0, Rewards = new RewardSelection { Active = 1, Pending = artifact ? 0u : 1, PromptId = 7 } };
+                snapshot.Rewards.Choices.Add(new RewardChoice { Kind = artifact ? RewardKind.Artifact : RewardKind.StatUpgrade });
+                hud.ApplySnapshot(snapshot, commands);
+                var panel = go.transform.Find("HUD canvas/Reward panel");
+                var block = panel.Find("Block artifact 1").GetComponent<Button>();
+                var reroll = panel.Find("Reroll upgrades").GetComponent<Button>();
+                Assert.That(block.gameObject.activeSelf, Is.EqualTo(artifact));
+                Assert.That(reroll.gameObject.activeSelf, Is.EqualTo(!artifact));
+                string Uses()
+                {
+                    var label = artifact ? panel.Find("Reward title").GetComponent<BatchedHudText>() : reroll.GetComponentInChildren<BatchedHudText>();
+                    return new string((char[])typeof(BatchedHudText).GetField("m_Text", flags).GetValue(label), 0,
+                        (int)typeof(BatchedHudText).GetField("m_Length", flags).GetValue(label));
+                }
+                Assert.That(Uses(), Does.Contain(artifact ? "Blocks left: 2" : "5 left"));
+                var action = artifact ? block : reroll;
+                action.onClick.Invoke(); action.onClick.Invoke(); panel.Find("Choice 1").GetComponent<Button>().onClick.Invoke();
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(action.interactable, Is.False); Assert.That(commands.Count, Is.EqualTo(1));
+                commands.TryDequeue(out var command);
+                Assert.That(command.Kind, Is.EqualTo(artifact ? SimulationCommandKind.BlockArtifact : SimulationCommandKind.RerollUpgrades));
+                Assert.That(command.PromptId, Is.EqualTo(7)); Assert.That(command.Generation, Is.EqualTo(4)); Assert.That(command.Value, Is.Zero);
+                snapshot.Rewards.PromptId++;
+                if (artifact) snapshot.Inventory.BlockedArtifacts = 1; else snapshot.Rewards.RerollsUsed = 1;
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(action.interactable, Is.True); Assert.That(Uses(), Does.Contain(artifact ? "Blocks left: 1" : "4 left"));
+                snapshot.Rewards.PromptId++;
+                if (artifact) snapshot.Inventory.BlockedArtifacts = 3; else snapshot.Rewards.RerollsUsed = 5;
+                hud.ApplySnapshot(snapshot, commands); action.onClick.Invoke(); hud.ApplySnapshot(snapshot, commands);
+                Assert.That(action.interactable, Is.False); Assert.That(commands.Count, Is.Zero);
+                Assert.That(action.gameObject.activeSelf, Is.False);
+                Assert.That(panel.GetComponent<RectTransform>().sizeDelta.y, Is.EqualTo(220));
+                Assert.That(panel.Find("Choice 1").GetComponent<Button>().navigation.selectOnDown, Is.Null);
+                if (artifact) Assert.That(Uses(), Does.Not.Contain("Blocks left").And.Not.Contain("Block excludes"));
+                snapshot.Generation++;
+                snapshot.Inventory.BlockedArtifacts = 0; snapshot.Rewards.RerollsUsed = 0;
+                hud.ApplySnapshot(snapshot, commands);
+                Assert.That(action.gameObject.activeSelf, Is.True); Assert.That(action.interactable, Is.True);
+            }
+            finally { Object.DestroyImmediate(go); commands.Dispose(); }
+        }
+
         [Test]
         public void HudRetainsRewardSelectionUntilCommandQueueHasSpace()
         {

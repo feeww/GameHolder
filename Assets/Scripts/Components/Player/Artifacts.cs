@@ -11,6 +11,7 @@ namespace GameHolder.PureDots
         public const int Capacity = 16;
         public FixedList512Bytes<ArtifactStack> Items;
         public ArtifactConfig Bonuses;
+        public uint BlockedArtifacts;
 
         public void Add(int index, uint quantity, ArtifactConfig config)
         {
@@ -38,12 +39,27 @@ namespace GameHolder.PureDots
         public static uint SeedForRun(ref RewardCatalog catalog, uint generation)
             => math.max(1u, math.hash(new uint2(RewardRoll.SeedForRun(ref catalog, generation), 0xA471FAC7u)));
 
+        public static bool Block(ref SimulationRunState run, PlayerStats stats, ref RewardCatalog catalog, SimulationCommand command)
+        {
+            if (command.Kind != SimulationCommandKind.BlockArtifact || !RewardRoll.MatchesPrompt(run, stats, command) ||
+                run.InventoryOpen != 0 || run.PendingChests == 0 || command.Value < 0 || command.Value >= run.Rewards.Choices.Length ||
+                math.countbits(run.Inventory.BlockedArtifacts) >= catalog.MaxArtifactBlocks) return false;
+            var choice = run.Rewards.Choices[command.Value];
+            if (choice.Kind != RewardKind.Artifact || choice.ArtifactIndex < 0 || choice.ArtifactIndex >= catalog.Artifacts.Length ||
+                (run.Inventory.BlockedArtifacts & (1u << choice.ArtifactIndex)) != 0) return false;
+            run.Inventory.BlockedArtifacts |= 1u << choice.ArtifactIndex;
+            run.Rewards.Active = 0;
+            Open(ref run, ref catalog);
+            RewardRoll.Open(ref run.Rewards, run.Loadout, ref catalog);
+            return true;
+        }
+
         public static void Open(ref SimulationRunState run, ref RewardCatalog catalog)
         {
             if (run.Rewards.Active != 0 || run.PendingChests == 0) return;
             var random = new Unity.Mathematics.Random(math.max(1u, run.ArtifactRandomState));
             run.Rewards.Choices.Clear();
-            uint offered = 0;
+            uint offered = run.Inventory.BlockedArtifacts;
             for (int slot = 0; slot < catalog.ArtifactChoicesPerChest; slot++)
             {
                 // ponytail: O(n²) over at most sixteen artifact types; use per-tier counts if the roster limit grows.
