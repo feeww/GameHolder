@@ -110,7 +110,7 @@ namespace GameHolder.PureDots
                 if (!A.Enemies.IsComponentEnabled(e)) continue;
                 float2 offset = A.Transforms[e].Position.xy - position;
                 if (math.dot(offset, direction) < 0) continue;
-                var config = A.Catalog.Value.Configs[(int)A.Types[e].Value];
+                var config = A.Catalog.Value.GetConfig(A.Types[e]);
                 float clearance = playerRadius + config.CollisionRadius + CrowdConstants.PlayerContactSkin;
                 if (SweptCollision.TryHit(offset, offset - step, clearance, out float contactTime))
                     pushScale = math.min(pushScale, contactTime + CrowdConstants.PlayerCrowdPushSpeed * Dt / (math.max(1, config.Mass) * stepLength));
@@ -147,6 +147,7 @@ namespace GameHolder.PureDots
             {
                 Entity e = A.EnemyPool.AllEnemies[i];
                 A.Enemies.SetComponentEnabled(e, false); A.Ranged.SetComponentEnabled(e, false);
+                A.Types[e] = default; A.Health[e] = default;
                 A.Separation[e] = default; A.MeleeCooldown[e] = default; A.RangedCooldown[e] = default;
                 A.Velocities[e] = default; A.Previous[e] = default; A.Transforms[e] = LocalTransform.Identity;
                 A.EnemyPool.InactiveEnemies.Enqueue(e);

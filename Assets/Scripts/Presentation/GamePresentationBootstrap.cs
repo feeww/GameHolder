@@ -16,6 +16,26 @@ namespace GameHolder.PureDots
         public CharacterWeaponDefinition StartingWeaponAsset => m_StartingWeaponAsset;
         public EnemyDefinition[] EnemyTypes => m_EnemyTypes;
 
+        [Header("Elite Enemies (applied on Play)")]
+        [Tooltip("Chance per spawn: 0.01 = 1%. Zero disables elites and preserves the wave RNG sequence.")]
+        [Range(0, 1)] [SerializeField] private float m_EliteSpawnProbability;
+        [Min(.01f)] [SerializeField] private float m_EliteHealthMultiplier = 2;
+        [Min(.01f)] [SerializeField] private float m_EliteSpeedMultiplier = 1.25f;
+        [Min(.01f)] [SerializeField] private float m_EliteSizeMultiplier = 1.25f;
+        [Min(.01f)] [SerializeField] private float m_EliteMassMultiplier = 2;
+        [Min(.01f)] [SerializeField] private float m_EliteDamageMultiplier = 2;
+        [Min(0)] [SerializeField] private float m_EliteExperienceMultiplier = 2;
+        [Tooltip("Multiplies each enemy asset's chest drop chance, capped at 100%. Zero disables elite chest drops.")]
+        [Min(0)] [SerializeField] private float m_EliteChestDropChanceMultiplier = 2;
+        public EliteEnemyConfig Elites => new EliteEnemyConfig
+        {
+            SpawnProbability = m_EliteSpawnProbability,
+            HealthMultiplier = m_EliteHealthMultiplier, SpeedMultiplier = m_EliteSpeedMultiplier,
+            SizeMultiplier = m_EliteSizeMultiplier, MassMultiplier = m_EliteMassMultiplier,
+            DamageMultiplier = m_EliteDamageMultiplier, ExperienceMultiplier = m_EliteExperienceMultiplier,
+            ChestDropChanceMultiplier = m_EliteChestDropChanceMultiplier
+        };
+
         [Header("Level-up Rewards")]
         [SerializeField] private RewardSettings m_Rewards = new RewardSettings();
         public RewardSettings Rewards => m_Rewards;
@@ -124,6 +144,18 @@ namespace GameHolder.PureDots
 
         public bool TryValidateConfiguration(out string error)
         {
+            var elites = Elites;
+            if (!Unity.Mathematics.math.isfinite(elites.SpawnProbability) || elites.SpawnProbability < 0 || elites.SpawnProbability > 1)
+            { error = "Elite spawn probability must be finite and between 0 and 1."; return false; }
+            if (!Unity.Mathematics.math.all(Unity.Mathematics.math.isfinite(new Unity.Mathematics.float4(
+                    elites.HealthMultiplier, elites.SpeedMultiplier, elites.SizeMultiplier, elites.MassMultiplier))) ||
+                !Unity.Mathematics.math.isfinite(elites.DamageMultiplier) ||
+                elites.HealthMultiplier <= 0 || elites.SpeedMultiplier <= 0 || elites.SizeMultiplier <= 0 ||
+                elites.MassMultiplier <= 0 || elites.DamageMultiplier <= 0)
+            { error = "Elite health, speed, size, mass, and damage multipliers must be finite and greater than zero."; return false; }
+            if (!Unity.Mathematics.math.all(Unity.Mathematics.math.isfinite(new Unity.Mathematics.float2(elites.ExperienceMultiplier, elites.ChestDropChanceMultiplier))) ||
+                elites.ExperienceMultiplier < 0 || elites.ChestDropChanceMultiplier < 0)
+            { error = "Elite experience and chest drop chance multipliers must be finite and non-negative."; return false; }
             if (m_StartingCharacter == null) { error = "Assign a Starting Character asset."; return false; }
             if (m_StartingWeaponAsset == null && m_StartingCharacter.Weapon == null)
             { error = "Assign a character weapon to the Starting Character or Starting Weapon Asset field."; return false; }
@@ -137,6 +169,13 @@ namespace GameHolder.PureDots
                     { error = $"Enemy '{enemy.name}' chest drop chance must be between 0 and 1."; return false; }
                     if (enemy.Ranged && enemy.Weapon == null)
                     { error = $"Ranged enemy '{enemy.name}' requires an enemy weapon asset."; return false; }
+                    var config = enemy.ToConfig(0, m_StartingCharacter.CollisionRadius);
+                    if (!Unity.Mathematics.math.all(Unity.Mathematics.math.isfinite(new Unity.Mathematics.float4(
+                        config.MaxHealth * elites.HealthMultiplier, config.MoveSpeed * elites.SpeedMultiplier,
+                        config.BaseDamage * elites.DamageMultiplier, config.Weapon.Damage * elites.DamageMultiplier))) ||
+                        !Unity.Mathematics.math.all(Unity.Mathematics.math.isfinite(new Unity.Mathematics.float2(
+                            config.Mass * elites.MassMultiplier, config.CollisionRadius * elites.SizeMultiplier))))
+                    { error = $"Enemy '{enemy.name}' elite stat multipliers overflow. Reduce the multipliers."; return false; }
                 }
             if (!hasEnemy) { error = "Assign at least one enemy asset to Enemy Types."; return false; }
             var artifacts = GetArtifacts();

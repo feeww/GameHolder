@@ -22,7 +22,7 @@ namespace GameHolder.PureDots
                 if (!A.Enemies.IsComponentEnabled(e)) continue;
                 float2 position = A.Transforms[e].Position.xy;
                 float2 previous = A.Previous[e].Value;
-                var config = A.Catalog.Value.Configs[(int)A.Types[e].Value];
+                var config = A.Catalog.Value.GetConfig(A.Types[e]);
                 float radius = config.CollisionRadius;
                 run.MaxEnemyStep = math.max(run.MaxEnemyStep, math.distance(position, previous));
                 run.MaxEnemyRadius = math.max(run.MaxEnemyRadius, radius);

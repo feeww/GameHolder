@@ -20,8 +20,7 @@ namespace GameHolder.PureDots
                 Entity enemy = A.EnemyPool.AllEnemies[i];
                 if (!A.Ranged.IsComponentEnabled(enemy)) continue;
                 var cooldown = A.RangedCooldown[enemy]; cooldown.CooldownTimer -= Dt;
-                uint type = A.Types[enemy].Value;
-                var config = A.Catalog.Value.Configs[(int)type];
+                var config = A.Catalog.Value.GetConfig(A.Types[enemy]);
                 var weapon = config.Weapon;
                 float2 position = A.Transforms[enemy].Position.xy;
                 float2 delta = run.PlayerPosition - position;

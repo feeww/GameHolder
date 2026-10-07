@@ -41,7 +41,7 @@ namespace GameHolder.PureDots
             visible.ValueRW = active.ValueRO;
             if (!active.ValueRO) return;
             mesh = MaterialMeshInfo.FromRenderMeshArrayIndices((int)type.Value, 0);
-            uv.Value = new float4(1, 1, 0, 0); color.Value = Catalog.Value.Configs[(int)type.Value].Tint;
+            uv.Value = new float4(1, 1, 0, 0); color.Value = Catalog.Value.GetConfig(type).Tint;
             float3 position = transform.Position;
             position.z = PresentationDepth.Calculate(position.y, CameraY, math.length(velocity.Value));
             world.Value = float4x4.TRS(position, transform.Rotation, new float3(transform.Scale));

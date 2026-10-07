@@ -27,7 +27,7 @@ namespace GameHolder.PureDots
                         do
                         {
                             if (math.any(entry.CellCoord != new int2(x, y)) || A.MeleeCooldown[entry.Entity].CooldownTimer > 0) continue;
-                            if (!(A.Catalog.Value.Configs[(int)A.Types[entry.Entity].Value].BaseDamage > 0)) continue;
+                            if (!(A.Catalog.Value.GetConfig(A.Types[entry.Entity]).BaseDamage > 0)) continue;
                             float distance = math.distancesq(run.PlayerPosition, entry.Position);
                             float radius = run.PlayerCollisionRadius + entry.Radius + CombatConstants.MeleeContactReach;
                             ulong key = DamageEvent.CreateTargetKey(entry.Entity);
@@ -37,10 +37,11 @@ namespace GameHolder.PureDots
                     }
                 if (nearest != Entity.Null)
                 {
-                    A.MeleeCooldown[nearest] = new EnemyMeleeCooldown { CooldownTimer = A.Catalog.Value.Configs[(int)A.Types[nearest].Value].ContactAttackInterval };
+                    var config = A.Catalog.Value.GetConfig(A.Types[nearest]);
+                    A.MeleeCooldown[nearest] = new EnemyMeleeCooldown { CooldownTimer = config.ContactAttackInterval };
                     // Contact was sampled at the tick endpoint, after any earlier swept projectile hits.
                     A.PlayerDamage.Enqueue(new PlayerDamageEvent { SourceEntity = nearest,
-                        Damage = A.Catalog.Value.Configs[(int)A.Types[nearest].Value].BaseDamage,
+                        Damage = config.BaseDamage,
                         HitDirection = math.normalizesafe(run.PlayerPosition - A.Transforms[nearest].Position.xy), HitTime = 1 });
                 }
             }

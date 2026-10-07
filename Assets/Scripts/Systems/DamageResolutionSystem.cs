@@ -43,8 +43,9 @@ namespace GameHolder.PureDots
                 if (health.Value > 0) continue;
                 A.Enemies.SetComponentEnabled(e, false); A.Ranged.SetComponentEnabled(e, false);
                 A.EnemyPool.InactiveEnemies.Enqueue(e); run.ActiveEnemies--; run.Kills++;
-                float2 position = A.Transforms[e].Position.xy; uint type = A.Types[e].Value;
-                var config = A.Catalog.Value.Configs[(int)type];
+                float2 position = A.Transforms[e].Position.xy; var type = A.Types[e];
+                var config = A.Catalog.Value.GetConfig(type);
+                A.Types[e] = new TypeId { Value = type.Value };
                 A.GemSpawns.Enqueue(new GemSpawnRequest { Position = position, ExperienceValue = config.ExperienceValue });
                 if (A.Rewards.Value.Artifacts.Length > 0 && config.ChestDropChance > 0)
                 {
@@ -54,7 +55,7 @@ namespace GameHolder.PureDots
                     run.ArtifactRandomState = random.state;
                 }
                 if (A.Bridge.DeathEventQueue.Count < SimulationConstants.CosmeticQueueCapacity)
-                    A.Bridge.DeathEventQueue.Enqueue(new DeathEvent { Position = position, TypeId = type });
+                    A.Bridge.DeathEventQueue.Enqueue(new DeathEvent { Position = position, TypeId = type.Value });
             }
             Deactivations.Clear();
             while (A.Deactivations.TryDequeue(out var e)) Deactivations.Add(e);

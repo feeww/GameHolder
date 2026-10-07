@@ -75,6 +75,7 @@ namespace GameHolder.PureDots
             foreach (var definition in settings.EnemyTypes) if (definition != null) definitions.Add(definition);
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<EnemyConfigCatalog>();
+            root.Elites = settings.Elites;
             var configs = builder.Allocate(ref root.Configs, definitions.Count);
             var enemyMaterials = new Material[definitions.Count];
             float threshold = 0;

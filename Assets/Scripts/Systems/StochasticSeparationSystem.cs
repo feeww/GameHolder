@@ -82,7 +82,7 @@ namespace GameHolder.PureDots
             float2 position = transform.Position.xy;
             if (math.distancesq(position, run.PlayerPosition) > CrowdConstants.Tier1RadiusSq)
             { Cache[e] = default; return; }
-            var config = Catalog.Value.Configs[(int)Types[e].Value];
+            var config = Catalog.Value.GetConfig(Types[e]);
             float priority = CrowdContact.PushPriority(config);
             float clearance = run.PlayerCollisionRadius + config.CollisionRadius + CrowdConstants.PlayerContactSkin;
             float queryRadius = config.CollisionRadius + run.MaxEnemyRadius + CrowdConstants.CrowdSteeringMargin;

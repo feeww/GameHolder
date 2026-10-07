@@ -51,12 +51,16 @@ namespace GameHolder.PureDots
                     int middle = (low + high) / 2;
                     if (choice < configs[middle].SpawnThreshold) high = middle; else low = middle + 1;
                 }
-                uint type = (uint)low;
-                var config = configs[low];
-                A.Transforms[enemy] = LocalTransform.FromPosition(new float3(position, 0));
+                var type = new TypeId { Value = (uint)low };
+                if (A.Catalog.Value.Elites.SpawnProbability > 0)
+                    type.IsElite = (byte)(random.NextFloat() < A.Catalog.Value.Elites.SpawnProbability ? 1 : 0);
+                var config = A.Catalog.Value.GetConfig(type);
+                var transform = LocalTransform.FromPosition(new float3(position, 0));
+                transform.Scale *= type.IsElite != 0 ? A.Catalog.Value.Elites.SizeMultiplier : 1;
+                A.Transforms[enemy] = transform;
                 A.Previous[enemy] = new PreviousPosition { Value = position };
-                A.Health[enemy] = new CurrentHealth { Value = A.Catalog.Value.Configs[(int)type].MaxHealth };
-                A.Types[enemy] = new TypeId { Value = type }; A.Velocities[enemy] = default;
+                A.Health[enemy] = new CurrentHealth { Value = config.MaxHealth };
+                A.Types[enemy] = type; A.Velocities[enemy] = default;
                 A.Separation[enemy] = default; A.MeleeCooldown[enemy] = default;
                 A.RangedCooldown[enemy] = new EnemyRangedCooldown { CooldownTimer = random.NextFloat(CombatConstants.InitialCooldownMinScale, 1) * config.Weapon.Interval };
                 A.Enemies.SetComponentEnabled(enemy, true); A.Ranged.SetComponentEnabled(enemy, config.Weapon.Interval > 0);

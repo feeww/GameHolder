@@ -35,8 +35,7 @@ namespace GameHolder.PureDots
             float distanceSq = math.lengthsq(toPlayer);
             float distance = math.sqrt(distanceSq);
             float2 direction = math.normalizesafe(toPlayer);
-            uint type = Types[e].Value;
-            var config = Catalog.Value.Configs[(int)type];
+            var config = Catalog.Value.GetConfig(Types[e]);
             float baseSpeed = config.MoveSpeed;
             var separation = Separation[e];
             float speed = baseSpeed;
