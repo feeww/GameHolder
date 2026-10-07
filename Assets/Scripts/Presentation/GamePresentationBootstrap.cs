@@ -24,6 +24,7 @@ namespace GameHolder.PureDots
         [SerializeField] private ArtifactDefinition[] m_Artifacts = new ArtifactDefinition[0];
         [SerializeField] private ArtifactChestSettings m_ArtifactChests = new ArtifactChestSettings();
         public ArtifactChestSettings ArtifactChests => m_ArtifactChests;
+        private void OnValidate() => m_Rewards?.EnsureRarityIds();
         [SerializeField] private Texture2D m_InventoryTexture;
         [SerializeField] private Rect m_InventoryUV = new Rect(0, 0, 1, 1);
         public Texture2D InventoryTexture => m_InventoryTexture;
@@ -141,11 +142,11 @@ namespace GameHolder.PureDots
             var artifacts = GetArtifacts();
             if (artifacts.Count > ArtifactInventory.Capacity)
             { error = $"Assign at most {ArtifactInventory.Capacity} different artifacts."; return false; }
-            foreach (var artifact in artifacts) if (!artifact.TryValidate(out error)) return false;
-            if (m_ArtifactChests == null) { error = "Configure Artifact Chests."; return false; }
-            if (!m_ArtifactChests.TryValidate(artifacts, out error)) return false;
             if (m_Rewards == null) { error = "Configure Level-up Rewards."; return false; }
             if (!m_Rewards.TryValidate(m_StartingCharacter, m_StartingWeaponAsset != null ? m_StartingWeaponAsset : m_StartingCharacter.Weapon, out error)) return false;
+            foreach (var artifact in artifacts) if (!artifact.TryValidate(out error, m_Rewards)) return false;
+            if (m_ArtifactChests == null) { error = "Configure Artifact Chests."; return false; }
+            if (!m_ArtifactChests.TryValidate(artifacts, m_Rewards, out error)) return false;
             error = null; return true;
         }
 

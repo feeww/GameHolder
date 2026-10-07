@@ -37,9 +37,11 @@ namespace GameHolder.PureDots.Tests
                 {
                     artifacts[i] = ScriptableObject.CreateInstance<ArtifactDefinition>();
                     artifacts[i].MaxHealth = 1;
-                    artifacts[i].Rarity = i < 2 ? ArtifactRarity.Common : i == 2 ? ArtifactRarity.Rare : ArtifactRarity.Epic;
+                    artifacts[i].Rarity = i < 2 ? 0 : i == 2 ? 1 : 2;
                 }
-                var settings = new ArtifactChestSettings { ChoicesPerChest = 1, LegendaryWeight = 999 };
+                var settings = new ArtifactChestSettings { ChoicesPerChest = 1 };
+                Array.Resize(ref m_Settings.Rarities, 4);
+                m_Settings.Rarities[3] = new RewardTierSettings("Legendary", 999, 25, Color.yellow);
                 using var catalog = m_Settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: artifacts, artifactChests: settings);
                 var counts = new int[3];
                 var run = new SimulationRunState { PendingChests = 1, ArtifactRandomState = 12345,
@@ -63,7 +65,7 @@ namespace GameHolder.PureDots.Tests
                     uint bit = 1u << run.Rewards.Choices[i].ArtifactIndex;
                     Assert.That(offered & bit, Is.Zero); offered |= bit;
                 }
-                catalog.Value.ArtifactRarityWeights.x = 0;
+                catalog.Value.Rarities[0].Weight = 0;
                 run.Rewards.Active = 0; var replay = run;
                 ArtifactRoll.Open(ref run, ref catalog.Value); ArtifactRoll.Open(ref replay, ref catalog.Value);
                 Assert.That(run.Rewards.Choices.Length, Is.EqualTo(2));
@@ -85,16 +87,16 @@ namespace GameHolder.PureDots.Tests
                 artifact.MaxHealth = 1;
                 var artifacts = new[] { artifact };
                 var settings = new ArtifactChestSettings();
-                Assert.That(settings.TryValidate(artifacts, out _), Is.True);
-                settings.ChoicesPerChest = 0; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
-                settings.ChoicesPerChest = 9; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
-                settings.ChoicesPerChest = 8; settings.CommonWeight = float.NaN;
-                Assert.That(settings.TryValidate(artifacts, out _), Is.False);
-                settings.CommonWeight = -1; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
-                settings.CommonWeight = 0; Assert.That(settings.TryValidate(artifacts, out _), Is.False);
+                Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.True);
+                settings.ChoicesPerChest = 0; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
+                settings.ChoicesPerChest = 9; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
+                settings.ChoicesPerChest = 8; m_Settings.Rarities[0].Weight = float.NaN;
+                Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
+                m_Settings.Rarities[0].Weight = -1; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
+                m_Settings.Rarities[0].Weight = 0; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.False);
                 Assert.Throws<InvalidOperationException>(() => m_Settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: artifacts, artifactChests: settings));
-                artifact.Rarity = (ArtifactRarity)4; Assert.That(artifact.TryValidate(out _), Is.False);
-                artifact.Rarity = ArtifactRarity.Rare; Assert.That(settings.TryValidate(artifacts, out _), Is.True);
+                artifact.Rarity = 4; Assert.That(artifact.TryValidate(out _, m_Settings), Is.False);
+                artifact.Rarity = 1; Assert.That(settings.TryValidate(artifacts, m_Settings, out _), Is.True);
             }
             finally { Object.DestroyImmediate(artifact); }
         }
@@ -111,7 +113,7 @@ namespace GameHolder.PureDots.Tests
                 var artifact = UnityEditor.AssetDatabase.LoadAssetAtPath<ArtifactDefinition>("Assets/GameData/Artifacts/VitalGauntlet.asset");
                 hud.BindArtifacts(new[] { artifact }, null);
                 var snapshot = new SimulationSnapshot { Generation = 4, PendingChests = 2, Rewards = new RewardSelection { Active = 1, PromptId = 7 } };
-                snapshot.Rewards.Choices.Add(new RewardChoice { Kind = RewardKind.Artifact, ArtifactIndex = 0, Rarity = (int)ArtifactRarity.Common,
+                snapshot.Rewards.Choices.Add(new RewardChoice { Kind = RewardKind.Artifact, ArtifactIndex = 0, Rarity = 0, Name = new FixedString64Bytes("Common"),
                     Color = new float4(.8f, .8f, .8f, 1) });
                 hud.ApplySnapshot(snapshot, commands);
                 var canvas = go.transform.Find("HUD canvas");
@@ -142,34 +144,38 @@ namespace GameHolder.PureDots.Tests
         [Test]
         public void EveryAvailableWeaponCanAppearOnTheFirstRollAndWeaponCardsDiffer()
         {
-            m_Catalog.Dispose();
-            m_Settings.Weapons = new[] { m_Settings.Weapons[0], m_Settings.Weapons[1],
-                UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterWeaponDefinition>("Assets/GameData/Weapons/Player/Weapon1.asset") };
-            m_Catalog = m_Settings.BuildCatalog(m_Character, m_Character.Weapon);
-            m_Catalog.Value.NewWeaponChance = 1;
-            m_Catalog.Value.UseFixedSeed = 0;
-            var loadout = RewardRoll.StartingLoadout();
-            var counts = new int[m_Catalog.Value.Weapons.Length];
-            for (uint generation = 1; generation <= 1000; generation++)
+            var additionalWeapon = Object.Instantiate(m_Character.Weapon);
+            try
             {
-                var rewards = new RewardSelection { Pending = 1, RandomState = RewardRoll.SeedForRun(ref m_Catalog.Value, generation) };
-                RewardRoll.Open(ref rewards, loadout, ref m_Catalog.Value);
-                Assert.That(rewards.Choices[0].Kind, Is.EqualTo(RewardKind.NewWeapon));
-                Assert.That(rewards.Choices[1].Kind, Is.EqualTo(RewardKind.NewWeapon));
-                Assert.That(rewards.Choices[0].WeaponIndex, Is.Not.EqualTo(rewards.Choices[1].WeaponIndex));
-                counts[rewards.Choices[0].WeaponIndex]++;
+                m_Catalog.Dispose();
+                m_Settings.Weapons = new[] { m_Settings.Weapons[0], m_Settings.Weapons[1], additionalWeapon };
+                m_Catalog = m_Settings.BuildCatalog(m_Character, m_Character.Weapon);
+                m_Catalog.Value.NewWeaponChance = 1;
+                m_Catalog.Value.UseFixedSeed = 0;
+                var loadout = RewardRoll.StartingLoadout();
+                var counts = new int[m_Catalog.Value.Weapons.Length];
+                for (uint generation = 1; generation <= 1000; generation++)
+                {
+                    var rewards = new RewardSelection { Pending = 1, RandomState = RewardRoll.SeedForRun(ref m_Catalog.Value, generation) };
+                    RewardRoll.Open(ref rewards, loadout, ref m_Catalog.Value);
+                    Assert.That(rewards.Choices[0].Kind, Is.EqualTo(RewardKind.NewWeapon));
+                    Assert.That(rewards.Choices[1].Kind, Is.EqualTo(RewardKind.NewWeapon));
+                    Assert.That(rewards.Choices[0].WeaponIndex, Is.Not.EqualTo(rewards.Choices[1].WeaponIndex));
+                    counts[rewards.Choices[0].WeaponIndex]++;
+                }
+                for (int i = 1; i < counts.Length; i++) Assert.That(counts[i], Is.InRange(200, 450));
+                Assert.That(RewardRoll.SeedForRun(ref m_Catalog.Value, 1), Is.Not.EqualTo(RewardRoll.SeedForRun(ref m_Catalog.Value, 2)));
+                m_Catalog.Value.UseFixedSeed = 1;
+                Assert.That(RewardRoll.SeedForRun(ref m_Catalog.Value, 1), Is.EqualTo(RewardRoll.SeedForRun(ref m_Catalog.Value, 2)));
+                var singleWeapon = new RewardSelection { Pending = 1 };
+                // A catalog with only one eligible weapon still fills both independent weapon slots.
+                var singleSettings = new RewardSettings { UseFixedSeed = true, NewWeaponChance = 1, Weapons = new[] { m_Settings.Weapons[1] } };
+                using var singleCatalog = singleSettings.BuildCatalog(m_Character, m_Character.Weapon);
+                RewardRoll.Open(ref singleWeapon, loadout, ref singleCatalog.Value);
+                Assert.That(singleWeapon.Choices[0].WeaponIndex, Is.EqualTo(1));
+                Assert.That(singleWeapon.Choices[1].WeaponIndex, Is.EqualTo(1));
             }
-            for (int i = 1; i < counts.Length; i++) Assert.That(counts[i], Is.InRange(200, 450));
-            Assert.That(RewardRoll.SeedForRun(ref m_Catalog.Value, 1), Is.Not.EqualTo(RewardRoll.SeedForRun(ref m_Catalog.Value, 2)));
-            m_Catalog.Value.UseFixedSeed = 1;
-            Assert.That(RewardRoll.SeedForRun(ref m_Catalog.Value, 1), Is.EqualTo(RewardRoll.SeedForRun(ref m_Catalog.Value, 2)));
-            var singleWeapon = new RewardSelection { Pending = 1 };
-            // A catalog with only one eligible weapon still fills both independent weapon slots.
-            var singleSettings = new RewardSettings { UseFixedSeed = true, NewWeaponChance = 1, Weapons = new[] { m_Settings.Weapons[1] } };
-            using var singleCatalog = singleSettings.BuildCatalog(m_Character, m_Character.Weapon);
-            RewardRoll.Open(ref singleWeapon, loadout, ref singleCatalog.Value);
-            Assert.That(singleWeapon.Choices[0].WeaponIndex, Is.EqualTo(1));
-            Assert.That(singleWeapon.Choices[1].WeaponIndex, Is.EqualTo(1));
+            finally { Object.DestroyImmediate(additionalWeapon); }
         }
 
         [Test]
@@ -215,7 +221,7 @@ namespace GameHolder.PureDots.Tests
                     Assert.That(choice.Target, Is.InRange(0, loadout.Count));
                     ref var entry = ref m_Catalog.Value.Weapons[choice.Target == 2 ? loadout.SecondIndex : loadout.FirstIndex];
                     Assert.That(RewardRoll.StatMask(m_Catalog.Value.CharacterStats, entry.Stats, entry.Config, choice.Target) & (1 << (int)choice.Stat), Is.Not.Zero);
-                    Assert.That(choice.Bonus, Is.EqualTo(m_Catalog.Value.Rarities[choice.Rarity].Bonus));
+                    Assert.That(choice.Bonus, Is.EqualTo(m_Catalog.Value.Rarities[choice.Rarity].Bonuses.Get(choice.Stat)));
                 }
             }
             for (int i = 0; i < rewards.Choices.Length; i++)
@@ -328,6 +334,71 @@ namespace GameHolder.PureDots.Tests
             finally { Object.DestroyImmediate(character); Object.DestroyImmediate(first); Object.DestroyImmediate(second); }
         }
 
+        [Test]
+        public void SharedUpgradeMenusApplyPerStatRarityPercentagesAndWeaponTypeFilters()
+        {
+            var first = Object.Instantiate(m_Character.Weapon);
+            var explosive = Object.Instantiate(m_Settings.Weapons[0]);
+            var laser = Object.Instantiate(m_Settings.Weapons[1]);
+            try
+            {
+                first.Type = WeaponType.Standard; first.UpgradableStats = WeaponUpgradeStats.All;
+                explosive.Type = WeaponType.Explosive; explosive.UpgradableStats = WeaponUpgradeStats.BlastRadius;
+                laser.Type = WeaponType.Laser; laser.UpgradableStats = WeaponUpgradeStats.Damage | WeaponUpgradeStats.Lifetime;
+                m_Settings.CharacterStats = CharacterUpgradeStats.MaxHealth;
+                m_Settings.WeaponStats = WeaponUpgradeStats.Damage | WeaponUpgradeStats.BlastRadius | WeaponUpgradeStats.Lifetime;
+                m_Settings.NewWeaponChance = 0; m_Settings.ChoicesPerLevel = 4;
+                m_Settings.Weapons = new[] { explosive, laser };
+                for (int i = 0; i < m_Settings.Rarities.Length; i++)
+                {
+                    ref var percent = ref m_Settings.Rarities[i].BonusPercents;
+                    percent.MaxHealth = 7 + i * 10; percent.Damage = 9 + i * 10;
+                    percent.BlastRadius = 11 + i * 10; percent.Lifetime = 13 + i * 10;
+                }
+                Assert.That(first.GetApplicableUpgradeStats(m_Settings.WeaponStats), Is.EqualTo(WeaponUpgradeStats.Damage | WeaponUpgradeStats.Lifetime));
+                Assert.That(laser.GetApplicableUpgradeStats(m_Settings.WeaponStats), Is.EqualTo(WeaponUpgradeStats.Damage));
+                Assert.That(explosive.GetApplicableUpgradeStats(m_Settings.WeaponStats) & WeaponUpgradeStats.BlastRadius, Is.Not.Zero);
+                using var catalog = m_Settings.BuildCatalog(m_Character, first);
+                Assert.That(catalog.Value.Weapons[1].Stats, Is.EqualTo(WeaponUpgradeStats.BlastRadius));
+                int seen = 0;
+                var loadout = RewardRoll.StartingLoadout(); loadout.Count = 2;
+                for (int second = 1; second <= 2; second++)
+                {
+                    loadout.SecondIndex = second;
+                    var rewards = new RewardSelection { Pending = 1 };
+                    RewardRoll.Open(ref rewards, loadout, ref catalog.Value);
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int i = 0; i < 1000; i++) { rewards.Active = 0; RewardRoll.Open(ref rewards, loadout, ref catalog.Value); }
+                    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                    Assert.That(allocated, Is.Zero);
+                    for (int i = 0; i < 100; i++)
+                    {
+                        rewards.Active = 0; RewardRoll.Open(ref rewards, loadout, ref catalog.Value);
+                        foreach (var choice in rewards.Choices)
+                        {
+                            seen |= 1 << (int)choice.Stat;
+                            Assert.That(choice.Bonus, Is.EqualTo(m_Settings.Rarities[choice.Rarity].BonusPercents.Get(choice.Stat) / 100).Within(.000001f));
+                            if (choice.Target == 0) Assert.That(choice.Stat, Is.EqualTo(UpgradeStat.MaxHealth));
+                            if (choice.Target == 1) Assert.That(choice.Stat, Is.EqualTo(UpgradeStat.Damage).Or.EqualTo(UpgradeStat.Lifetime));
+                            if (choice.Target == 2) Assert.That(choice.Stat, Is.EqualTo(second == 1 ? UpgradeStat.BlastRadius : UpgradeStat.Damage));
+                        }
+                    }
+                }
+                Assert.That(seen, Is.EqualTo((1 << (int)UpgradeStat.MaxHealth) | (1 << (int)UpgradeStat.Damage) | (1 << (int)UpgradeStat.BlastRadius) | (1 << (int)UpgradeStat.Lifetime)));
+                laser.Damage = 0;
+                Assert.That(laser.GetApplicableUpgradeStats(m_Settings.WeaponStats), Is.EqualTo(WeaponUpgradeStats.None));
+                m_Settings.Rarities[0].BonusPercents.Damage = float.NaN;
+                Assert.That(m_Settings.TryValidate(m_Character, first, out _), Is.False);
+                m_Settings.Rarities[0].BonusPercents.Damage = 0;
+                Assert.That(m_Settings.TryValidate(m_Character, first, out _), Is.False);
+                m_Settings.WeaponStats = WeaponUpgradeStats.None;
+                Assert.That(m_Settings.TryValidate(m_Character, first, out _), Is.True);
+                m_Settings.CharacterStats = CharacterUpgradeStats.None;
+                Assert.That(m_Settings.TryValidate(m_Character, first, out _), Is.False);
+            }
+            finally { Object.DestroyImmediate(first); Object.DestroyImmediate(explosive); Object.DestroyImmediate(laser); }
+        }
+
         [TestCase(1, 4)] [TestCase(2, 4)] [TestCase(2, 8)]
         public void SmallWeaponStatPoolsFillConfiguredPromptsWithoutAllocations(int statCount, int choices)
         {
@@ -367,23 +438,160 @@ namespace GameHolder.PureDots.Tests
         {
             var settings = new RewardSettings();
             JsonUtility.FromJsonOverwrite("{\"Common\":{\"Weight\":40,\"BonusPercent\":7},\"Rare\":{\"Weight\":35,\"BonusPercent\":12},\"Epic\":{\"Weight\":25,\"BonusPercent\":19}}", settings);
-            Assert.That(settings.Rarities.Length, Is.EqualTo(3));
+            Assert.That(settings.Rarities.Length, Is.EqualTo(4));
             Assert.That(settings.Rarities[0].Name, Is.EqualTo("Common"));
             Assert.That(settings.Rarities[0].Weight, Is.EqualTo(40));
-            Assert.That(settings.Rarities[0].BonusPercent, Is.EqualTo(7));
-            Assert.That(settings.Rarities[2].BonusPercent, Is.EqualTo(19));
+            Assert.That(settings.Rarities[0].BonusPercents.MaxHealth, Is.EqualTo(7));
+            Assert.That(settings.Rarities[2].BonusPercents.Damage, Is.EqualTo(19));
             settings.Rarities = new[] { new RewardTierSettings("Legendary", 100, 30, Color.yellow) };
             var copy = JsonUtility.FromJson<RewardSettings>(JsonUtility.ToJson(settings));
             copy.OnAfterDeserialize();
             Assert.That(copy.Rarities.Length, Is.EqualTo(1));
             Assert.That(copy.Rarities[0].Name, Is.EqualTo("Legendary"));
-            Assert.That(copy.Rarities[0].BonusPercent, Is.EqualTo(30));
+            Assert.That(copy.Rarities[0].BonusPercents.PickupRadius, Is.EqualTo(30));
             foreach (var tiers in new[] { null, new RewardTierSettings[0], new[] { new RewardTierSettings("", 1, 5, Color.white) },
                 new[] { new RewardTierSettings("Broken", 1, float.NaN, Color.white) } })
             {
                 settings.Rarities = tiers;
                 Assert.That(settings.TryValidate(m_Character, m_Character.Weapon, out _), Is.False);
             }
+        }
+
+        [Test]
+        public void SharedRaritiesPreserveAssignmentsAndRollCustomArtifactsWithoutAllocations()
+        {
+            var custom = new RewardTierSettings("Ancient", 100, 35, new Color(.85f, .75f, 1));
+            Array.Resize(ref m_Settings.Rarities, 5);
+            m_Settings.Rarities[3] = new RewardTierSettings("Legendary", 0, 25, Color.yellow);
+            m_Settings.Rarities[4] = custom;
+            m_Settings.EnsureRarityIds();
+            var artifact = ScriptableObject.CreateInstance<ArtifactDefinition>();
+            try
+            {
+                artifact.MaxHealth = 1; artifact.Rarity = custom.Id;
+                var settings = new ArtifactChestSettings();
+                Assert.That(m_Settings.FindRarityIndex(artifact.Rarity), Is.EqualTo(4));
+                using (var catalog = m_Settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: new[] { artifact }, artifactChests: settings))
+                {
+                    var run = new SimulationRunState { PendingChests = 1, ArtifactRandomState = 12345 };
+                    ArtifactRoll.Open(ref run, ref catalog.Value);
+                    long before = GC.GetAllocatedBytesForCurrentThread();
+                    for (int i = 0; i < 10000; i++) { run.Rewards.Active = 0; ArtifactRoll.Open(ref run, ref catalog.Value); }
+                    long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+                    Assert.That(allocated, Is.Zero);
+                    Assert.That(run.Rewards.Choices.Length, Is.EqualTo(1));
+                    Assert.That(run.Rewards.Choices[0].Rarity, Is.EqualTo(4));
+                    Assert.That(run.Rewards.Choices[0].Name.ToString(), Is.EqualTo("Ancient"));
+                    Assert.That(run.Rewards.Choices[0].Color, Is.EqualTo(new float4(.85f, .75f, 1, 1)));
+                }
+                custom.Name = "Mythic";
+                Array.Reverse(m_Settings.Rarities);
+                var copy = JsonUtility.FromJson<RewardSettings>(JsonUtility.ToJson(m_Settings));
+                Assert.That(copy.FindRarityIndex(artifact.Rarity), Is.Zero);
+                Assert.That(copy.Rarities[0].Name, Is.EqualTo("Mythic"));
+                using (var catalog = copy.BuildCatalog(m_Character, m_Character.Weapon, artifacts: new[] { artifact }))
+                    Assert.That(catalog.Value.Artifacts[0].Rarity, Is.Zero);
+                m_Settings.Rarities = Array.FindAll(m_Settings.Rarities, tier => tier != custom);
+                Assert.That(m_Settings.FindRarityIndex(artifact.Rarity), Is.EqualTo(-1));
+                Assert.That(artifact.TryValidate(out _, m_Settings), Is.False);
+                Assert.Throws<InvalidOperationException>(() => m_Settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: new[] { artifact }));
+                var replacement = new RewardTierSettings("Replacement", 1, 5, Color.white);
+                Array.Resize(ref m_Settings.Rarities, 5); m_Settings.Rarities[4] = replacement;
+                m_Settings.EnsureRarityIds();
+                Assert.That(replacement.Id, Is.GreaterThan(custom.Id));
+            }
+            finally { Object.DestroyImmediate(artifact); }
+        }
+
+        [Test]
+        public void LegacyBonusPercentMigratesToEveryStatOnce()
+        {
+            var settings = JsonUtility.FromJson<RewardSettings>("{\"m_RarityVersion\":1,\"Rarities\":[{\"Name\":\"Epic\",\"Weight\":5,\"BonusPercent\":15},{\"Name\":\"Ancient\",\"Weight\":25,\"BonusPercent\":35},{\"Name\":\"Common\",\"Weight\":70,\"BonusPercent\":5},{\"Name\":\"Rare\",\"Weight\":25,\"BonusPercent\":10},{\"Name\":\"Legendary\",\"Weight\":5,\"BonusPercent\":25}]}");
+            Assert.That(settings.Rarities[0].Id, Is.EqualTo(2));
+            Assert.That(settings.Rarities[0].BonusPercents.MaxHealth, Is.EqualTo(15));
+            Assert.That(settings.Rarities[0].BonusPercents.Damage, Is.EqualTo(15));
+            Assert.That(settings.Rarities[2].Id, Is.Zero);
+            Assert.That(settings.Rarities[2].BonusPercents.MaxHealth, Is.EqualTo(5));
+            Assert.That(settings.Rarities[3].BonusPercents.Range, Is.EqualTo(10));
+            Assert.That(settings.Rarities[4].BonusPercents.Lifetime, Is.EqualTo(25));
+            settings.Rarities[0].BonusPercents.MaxHealth = 12;
+            settings.Rarities[0].BonusPercents.Damage = 21;
+            settings.WeaponStats = WeaponUpgradeStats.Size;
+            var copy = JsonUtility.FromJson<RewardSettings>(JsonUtility.ToJson(settings));
+            copy.OnAfterDeserialize();
+            Assert.That(copy.Rarities[0].BonusPercents.MaxHealth, Is.EqualTo(12));
+            Assert.That(copy.Rarities[0].BonusPercents.Damage, Is.EqualTo(21));
+            Assert.That(copy.WeaponStats, Is.EqualTo(WeaponUpgradeStats.Size));
+        }
+
+        [TestCase(0)] [TestCase(1)]
+        public void LegacyArtifactRaritiesMigrateOnceWithoutRestoringRemovedTiers(int version)
+        {
+            var json = version == 0
+                ? "{\"Common\":{\"Weight\":40,\"BonusPercent\":7},\"Rare\":{\"Weight\":35,\"BonusPercent\":12},\"Epic\":{\"Weight\":25,\"BonusPercent\":19}}"
+                : "{\"m_RarityVersion\":1,\"Rarities\":[{\"Name\":\" Rare \",\"Weight\":35,\"BonusPercent\":12}]}";
+            var settings = JsonUtility.FromJson<RewardSettings>(json);
+            Assert.That(settings.Rarities.Length, Is.EqualTo(4));
+            Assert.That(settings.Rarities[settings.FindRarityIndex(1)].Weight, Is.EqualTo(35));
+            var artifact = ScriptableObject.CreateInstance<ArtifactDefinition>();
+            try
+            {
+                artifact.MaxHealth = 1;
+                for (int rarity = 0; rarity < 4; rarity++)
+                {
+                    artifact.Rarity = rarity;
+                    Assert.That(artifact.TryValidate(out var error, settings), Is.True, error);
+                }
+                using (var catalog = settings.BuildCatalog(m_Character, m_Character.Weapon, artifacts: new[] { artifact }))
+                {
+                    var run = new SimulationRunState { PendingChests = 1, ArtifactRandomState = 12345 };
+                    ArtifactRoll.Open(ref run, ref catalog.Value);
+                    Assert.That(run.Rewards.Choices[0].Name.ToString(), Is.EqualTo("Legendary"));
+                }
+                var copy = JsonUtility.FromJson<RewardSettings>(JsonUtility.ToJson(settings));
+                Assert.That(copy.Rarities.Length, Is.EqualTo(4));
+                copy.Rarities = Array.FindAll(copy.Rarities, tier => tier.Id != 3);
+                copy = JsonUtility.FromJson<RewardSettings>(JsonUtility.ToJson(copy));
+                Assert.That(copy.FindRarityIndex(3), Is.EqualTo(-1));
+                Assert.That(artifact.TryValidate(out _, copy), Is.False);
+            }
+            finally { Object.DestroyImmediate(artifact); }
+        }
+
+        [Test]
+        public void ExistingSceneUsesSharedRaritiesAndRegistersArtifactInspector()
+        {
+            var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity", UnityEditor.SceneManagement.OpenSceneMode.Additive);
+            try
+            {
+                GamePresentationBootstrap bootstrap = null;
+                foreach (var root in scene.GetRootGameObjects())
+                    if ((bootstrap = root.GetComponentInChildren<GamePresentationBootstrap>()) != null) break;
+                Assert.That(bootstrap, Is.Not.Null);
+                Assert.That(bootstrap.TryValidateConfiguration(out var error), Is.True, error);
+                using (var catalog = bootstrap.Rewards.BuildCatalog(bootstrap.StartingCharacter,
+                    bootstrap.StartingWeaponAsset != null ? bootstrap.StartingWeaponAsset : bootstrap.StartingCharacter.Weapon,
+                    artifacts: bootstrap.GetArtifacts(), artifactChests: bootstrap.ArtifactChests))
+                {
+                    Assert.That(catalog.Value.Rarities.Length, Is.EqualTo(bootstrap.Rewards.Rarities.Length));
+                    for (int i = 0; i < catalog.Value.Rarities.Length; i++)
+                        Assert.That(catalog.Value.Rarities[i].Weight, Is.EqualTo(bootstrap.Rewards.Rarities[i].Weight));
+                }
+                foreach (var artifact in bootstrap.GetArtifacts())
+                {
+                    Assert.That(artifact.TryValidate(out error, bootstrap.Rewards), Is.True, error);
+                    var inspector = UnityEditor.Editor.CreateEditor(artifact);
+                    try { Assert.That(inspector.GetType().Name, Is.EqualTo("ArtifactDefinitionEditor")); }
+                    finally { Object.DestroyImmediate(inspector); }
+                }
+                var script = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEditor.MonoScript>("Assets/Scripts/Editor/RaritySettingsWindow.cs");
+                Assert.That(script.GetClass().Name, Is.EqualTo("RaritySettingsWindow"));
+                var menu = (UnityEditor.MenuItem)Attribute.GetCustomAttribute(script.GetClass().GetMethod("Open"), typeof(UnityEditor.MenuItem));
+                Assert.That(menu.menuItem, Is.EqualTo("Pure DOTS/Rarities & Drop Chances"));
+                foreach (string method in new[] { "OpenCharacterUpgrades", "OpenWeaponUpgrades" })
+                    Assert.That(Attribute.GetCustomAttribute(script.GetClass().GetMethod(method), typeof(UnityEditor.MenuItem)), Is.Not.Null);
+            }
+            finally { UnityEditor.SceneManagement.EditorSceneManager.CloseScene(scene, true); }
         }
 
         [Test]

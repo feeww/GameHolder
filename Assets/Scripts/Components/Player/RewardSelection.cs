@@ -21,7 +21,8 @@ namespace GameHolder.PureDots
     public struct RewardTier
     {
         public FixedString64Bytes Name;
-        public float Weight, Bonus;
+        public float Weight;
+        public UpgradeBonuses Bonuses;
         public float4 Color;
     }
     public struct RewardCatalog
@@ -36,7 +37,6 @@ namespace GameHolder.PureDots
         public BlobArray<RewardWeapon> Weapons;
         public BlobArray<ArtifactConfig> Artifacts;
         public int ArtifactChoicesPerChest;
-        public float4 ArtifactRarityWeights;
     }
     public struct RewardCatalogSingleton : IComponentData { public BlobAssetReference<RewardCatalog> Catalog; }
     public struct RewardChoice
@@ -50,7 +50,7 @@ namespace GameHolder.PureDots
         public float4 Color;
         public int WeaponIndex;
         public int ArtifactIndex;
-        // Weapon name or stat-upgrade rarity name.
+        // Weapon name or shared rarity name.
         public FixedString64Bytes Name;
     }
     public struct RewardSelection
@@ -61,9 +61,15 @@ namespace GameHolder.PureDots
         public uint Pending, PromptId, RandomState;
         public byte Active;
     }
+    [Serializable]
     public struct UpgradeBonuses
     {
         public float MaxHealth, PickupRadius, Damage, AttackRate, Range, Size, BlastRadius, Lifetime;
+        public float Get(UpgradeStat stat) => stat switch {
+            UpgradeStat.MaxHealth => MaxHealth, UpgradeStat.PickupRadius => PickupRadius,
+            UpgradeStat.Damage => Damage, UpgradeStat.AttackRate => AttackRate,
+            UpgradeStat.Range => Range, UpgradeStat.Size => Size,
+            UpgradeStat.BlastRadius => BlastRadius, UpgradeStat.Lifetime => Lifetime, _ => 0 };
         public void Add(UpgradeStat stat, float bonus)
         {
             switch (stat)
@@ -197,7 +203,7 @@ namespace GameHolder.PureDots
             int rarity = RollRarity(ref random, ref catalog);
             ref var tier = ref catalog.Rarities[rarity];
             return new RewardChoice { Kind = RewardKind.StatUpgrade, Target = (byte)chosenTarget, Stat = stat,
-                Rarity = rarity, Bonus = tier.Bonus, Color = tier.Color, Name = tier.Name };
+                Rarity = rarity, Bonus = tier.Bonuses.Get(stat), Color = tier.Color, Name = tier.Name };
         }
 
         private static bool OfferedWeapon(ref FixedList4096Bytes<RewardChoice> choices, int index)

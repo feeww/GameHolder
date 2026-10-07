@@ -10,7 +10,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 63820e063b2e54742ae5d14932d185cf, type: 3}
-  m_Name: Weapon1
+  m_Name: ORANGE!
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterWeaponDefinition
   Type: 1
   AttackInterval: 1.43
@@ -22,7 +22,7 @@ MonoBehaviour:
   BlastRadius: 12
   ProjectileCount: 12
   SpreadAngle: 1.5
-  WeaponTexture: {fileID: 2800000, guid: ef484c55fc4157543ba4a3141805b948, type: 3}
-  ProjectileTexture: {fileID: 2800000, guid: b3473cabde177f54eabcf0efe7f24453, type: 3}
+  WeaponTexture: {fileID: 2800000, guid: 651e7e7d1978dee42894a4b7bc2d19a3, type: 3}
+  ProjectileTexture: {fileID: 2800000, guid: 23133fe0234887d44aaa0279c98c0f4d, type: 3}
   Tint: {r: 0.9803922, g: 0.5019608, b: 0.4470589, a: 1}
   UpgradableStats: 3

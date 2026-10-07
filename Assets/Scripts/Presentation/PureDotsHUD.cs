@@ -445,13 +445,7 @@ namespace GameHolder.PureDots
             m_Length = 0; AppendNumber(slot); Append(". ");
             if (choice.Kind == RewardKind.Artifact)
             {
-                switch ((ArtifactRarity)choice.Rarity)
-                {
-                    case ArtifactRarity.Rare: Append("Rare"); break;
-                    case ArtifactRarity.Epic: Append("Epic"); break;
-                    case ArtifactRarity.Legendary: Append("Legendary"); break;
-                    default: Append("Common"); break;
-                }
+                Append(choice.Name);
                 Append("\n"); Append(m_ArtifactNames[choice.ArtifactIndex], 20);
                 var artifact = m_Artifacts[choice.ArtifactIndex];
                 if (artifact.MaxHealth > 0) { Append("\n+"); AppendFixed(artifact.MaxHealth); Append(" max HP"); }

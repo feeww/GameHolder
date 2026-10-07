@@ -409,53 +409,139 @@ MonoBehaviour:
     CharacterTargetWeight: 1
     WeaponTargetWeight: 1
     CharacterStats: 3
+    WeaponStats: 63
     Rarities:
-    - Name: Common
+    - Id: 0
+      Name: Common
       Weight: 70
-      BonusPercent: 5
+      BonusPercents:
+        MaxHealth: 5
+        PickupRadius: 5
+        Damage: 3
+        AttackRate: 2
+        Range: 5
+        Size: 5
+        BlastRadius: 3
+        Lifetime: 2
       Color: {r: 0.8, g: 0.8, b: 0.8, a: 1}
-    - Name: Rare
+      BonusPercent: 5
+      m_StatBonusesInitialized: 1
+    - Id: 1
+      Name: Rare
       Weight: 25
-      BonusPercent: 10
+      BonusPercents:
+        MaxHealth: 10
+        PickupRadius: 10
+        Damage: 10
+        AttackRate: 10
+        Range: 10
+        Size: 10
+        BlastRadius: 10
+        Lifetime: 10
       Color: {r: 0.25, g: 0.6, b: 1, a: 1}
-    - Name: Epic
-      Weight: 5
-      BonusPercent: 15
+      BonusPercent: 10
+      m_StatBonusesInitialized: 1
+    - Id: 2
+      Name: Epic
+      Weight: 10
+      BonusPercents:
+        MaxHealth: 15
+        PickupRadius: 15
+        Damage: 15
+        AttackRate: 15
+        Range: 15
+        Size: 15
+        BlastRadius: 15
+        Lifetime: 15
       Color: {r: 0.8, g: 0.35, b: 1, a: 1}
-    - Name: Legendary
+      BonusPercent: 15
+      m_StatBonusesInitialized: 1
+    - Id: 3
+      Name: Legendary
       Weight: 5
-      BonusPercent: 25
+      BonusPercents:
+        MaxHealth: 25
+        PickupRadius: 25
+        Damage: 25
+        AttackRate: 25
+        Range: 25
+        Size: 25
+        BlastRadius: 25
+        Lifetime: 25
       Color: {r: 1, g: 0.6470588, b: 0, a: 1}
-    - Name: Ancient
-      Weight: 25
-      BonusPercent: 35
+      BonusPercent: 25
+      m_StatBonusesInitialized: 1
+    - Id: 4
+      Name: Ancient
+      Weight: 1
+      BonusPercents:
+        MaxHealth: 150
+        PickupRadius: 35
+        Damage: 35
+        AttackRate: 35
+        Range: 35
+        Size: 35
+        BlastRadius: 35
+        Lifetime: 35
       Color: {r: 0.85, g: 0.75, b: 1, a: 1}
-    m_RarityVersion: 1
+      BonusPercent: 35
+      m_StatBonusesInitialized: 1
+    m_RarityVersion: 3
+    m_NextRarityId: 5
     Common:
+      Id: 0
       Name: 
       Weight: 0
-      BonusPercent: 0
+      BonusPercents:
+        MaxHealth: 0
+        PickupRadius: 0
+        Damage: 0
+        AttackRate: 0
+        Range: 0
+        Size: 0
+        BlastRadius: 0
+        Lifetime: 0
       Color: {r: 0, g: 0, b: 0, a: 0}
+      BonusPercent: 0
+      m_StatBonusesInitialized: 0
     Rare:
+      Id: 0
       Name: 
       Weight: 0
-      BonusPercent: 0
+      BonusPercents:
+        MaxHealth: 0
+        PickupRadius: 0
+        Damage: 0
+        AttackRate: 0
+        Range: 0
+        Size: 0
+        BlastRadius: 0
+        Lifetime: 0
       Color: {r: 0, g: 0, b: 0, a: 0}
+      BonusPercent: 0
+      m_StatBonusesInitialized: 0
     Epic:
+      Id: 0
       Name: 
       Weight: 0
-      BonusPercent: 0
+      BonusPercents:
+        MaxHealth: 0
+        PickupRadius: 0
+        Damage: 0
+        AttackRate: 0
+        Range: 0
+        Size: 0
+        BlastRadius: 0
+        Lifetime: 0
       Color: {r: 0, g: 0, b: 0, a: 0}
+      BonusPercent: 0
+      m_StatBonusesInitialized: 0
   m_Artifacts:
   - {fileID: 11400000, guid: 7ee055bfcb3210a4ab202aac4331daf2, type: 2}
   - {fileID: 11400000, guid: 0ba02c6cd7556f9479cfec2a7bd31b31, type: 2}
   - {fileID: 11400000, guid: 52f3c67a8f8f14844a99b9644e767ebb, type: 2}
   m_ArtifactChests:
     ChoicesPerChest: 2
-    CommonWeight: 33
-    RareWeight: 33
-    EpicWeight: 34
-    LegendaryWeight: 1
   m_InventoryTexture: {fileID: 2800000, guid: fe481f7c7665c2546b161af0df73858b, type: 3}
   m_InventoryUV:
     serializedVersion: 2
