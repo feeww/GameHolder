@@ -30,7 +30,7 @@ namespace GameHolder.PureDots
                 float priority = CrowdContact.PushPriority(config);
                 A.Grid.Add(SpatialHashUtils.ComputeHash(cell), new GridEntry
                 { Entity = e, Position = position, PreviousPosition = previous, CellCoord = cell, Radius = radius,
-                    PushPriority = priority });
+                    PushPriority = priority, PoolIndex = i });
                 A.CrowdCells.TryGetValue(cell, out var crowd);
                 crowd.Count++;
                 A.CrowdCells[cell] = crowd;

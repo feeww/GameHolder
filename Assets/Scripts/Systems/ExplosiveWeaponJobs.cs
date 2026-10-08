@@ -24,7 +24,7 @@ namespace GameHolder.PureDots
                 if (explosive.Detonated != 0) continue;
                 var data = A.ProjectileData[projectile];
                 float2 start = A.Previous[projectile].Value, end = A.Transforms[projectile].Position.xy;
-                bool hit = ProjectileCollision.FirstHit(A, start, end, data.Radius, data.ActiveStepFraction, run, out _, out float time);
+                bool hit = ProjectileCollision.FirstHit(A.Grid, start, end, data.Radius, data.ActiveStepFraction, run, out _, out float time);
                 if (!hit && data.RemainingLifetime > 0) continue;
                 time = hit ? time : 1;
                 float2 center = math.lerp(start, end, time);

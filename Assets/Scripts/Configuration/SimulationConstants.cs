@@ -8,6 +8,7 @@ namespace GameHolder.PureDots
         public const int DefaultMaxEnemies = 10000;
         public const int DefaultMaxProjectiles = 5000;
         public const int DefaultMaxGems = 1024;
+        public const float FixedTimestep = 1f / 60;
         public const float FloatingOriginThreshold = 2000.0f;
         public const float FloatingOriginThresholdSq = FloatingOriginThreshold * FloatingOriginThreshold;
 

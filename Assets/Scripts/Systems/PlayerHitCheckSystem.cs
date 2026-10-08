@@ -1,7 +1,10 @@
 using Unity.Burst;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
@@ -45,23 +48,36 @@ namespace GameHolder.PureDots
                         HitDirection = math.normalizesafe(run.PlayerPosition - A.Transforms[nearest].Position.xy), HitTime = 1 });
                 }
             }
-            for (int i = 0; i < A.EnemyProjectilePool.AllProjectiles.Length; i++)
-            {
-                Entity projectile = A.EnemyProjectilePool.AllProjectiles[i];
-                if (!A.Projectiles.IsComponentEnabled(projectile) || A.Explosives.IsComponentEnabled(projectile) ||
-                    A.Lasers.IsComponentEnabled(projectile)) continue;
-                float2 start = A.Previous[projectile].Value - run.PreviousPlayerPosition;
-                var data = A.ProjectileData[projectile];
-                if (data.ActiveStepFraction <= 0) continue;
-                float2 end = A.Transforms[projectile].Position.xy - math.lerp(run.PreviousPlayerPosition, run.PlayerPosition, data.ActiveStepFraction);
-                float radius = data.Radius + run.PlayerCollisionRadius;
-                // This AABB includes the complete relative sweep, even during a long frame.
-                if (math.any(math.min(start, end) > radius) || math.any(math.max(start, end) < -radius)) continue;
-                if (!SweptCollision.TryHit(start, end, radius, out float time)) continue;
-                A.Deactivations.Enqueue(projectile);
-                if (vulnerable) A.PlayerDamage.Enqueue(new PlayerDamageEvent
-                { SourceEntity = projectile, Damage = data.Damage, HitDirection = math.normalizesafe(-end), HitTime = time * data.ActiveStepFraction });
-            }
+        }
+    }
+
+    [BurstCompile]
+    [WithAll(typeof(EnemyProjectileTag), typeof(ProjectileActiveTag))]
+    public partial struct EnemyProjectileHitJob : IJobEntity
+    {
+        [ReadOnly] public ComponentLookup<SimulationRunState> RunState;
+        [ReadOnly] public ComponentLookup<PlayerStats> Stats;
+        [ReadOnly] public ComponentLookup<PlayerInvulnerability> Invulnerability;
+        [ReadOnly] public ComponentLookup<ExplosiveProjectile> Explosives;
+        [ReadOnly] public ComponentLookup<LaserBeam> Lasers;
+        public UnsafeQueue<PlayerDamageEvent>.ParallelWriter Damage;
+        public UnsafeQueue<Entity>.ParallelWriter Deactivations;
+        public Entity State;
+        public void Execute(Entity projectile, in LocalTransform transform, in PreviousPosition previous, in ProjectileData data)
+        {
+            var run = RunState[State];
+            if (run.Paused || Stats[run.Player].IsDead != 0 || Explosives.IsComponentEnabled(projectile) ||
+                Lasers.IsComponentEnabled(projectile) || data.ActiveStepFraction <= 0) return;
+            float2 start = previous.Value - run.PreviousPlayerPosition;
+            float2 end = transform.Position.xy - math.lerp(run.PreviousPlayerPosition, run.PlayerPosition, data.ActiveStepFraction);
+            float radius = data.Radius + run.PlayerCollisionRadius;
+            // This AABB includes the complete relative sweep, even during a long frame.
+            if (math.any(math.min(start, end) > radius) || math.any(math.max(start, end) < -radius)) return;
+            if (!SweptCollision.TryHit(start, end, radius, out float time)) return;
+            Deactivations.Enqueue(projectile);
+            if (run.GodMode == 0 && Invulnerability[run.Player].Timer <= 0)
+                Damage.Enqueue(new PlayerDamageEvent { SourceEntity = projectile, Damage = data.Damage,
+                    HitDirection = math.normalizesafe(-end), HitTime = time * data.ActiveStepFraction });
         }
     }
 }

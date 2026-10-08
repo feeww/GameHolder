@@ -13,6 +13,7 @@ namespace GameHolder.PureDots
         public float2 PreviousPosition;
         public float Radius;
         public float PushPriority;
+        public int PoolIndex;
     }
 
     public struct CrowdCell

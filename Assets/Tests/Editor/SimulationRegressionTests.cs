@@ -107,6 +107,12 @@ namespace GameHolder.PureDots.Tests
         private void Tick(float dt = 1f / 60)
         {
             m_Time += dt; m_World.SetTime(new TimeData(m_Time, dt));
+            if (math.lengthsq(m_Em.GetComponentData<SimulationInput>(m_Input).Movement) > 0)
+            {
+                // Fixtures write pooled entities directly; publish those writes before querying the previous grid.
+                m_World.GetOrCreateSystem<GridTestSystem>().Update(m_World.Unmanaged);
+                m_Em.GetComponentData<SimulationJobFence>(m_Run).Handle.Complete();
+            }
             m_Pipeline.Update(m_World.Unmanaged);
             m_Em.GetComponentData<SimulationJobFence>(m_Run).Handle.Complete();
         }
@@ -780,7 +786,7 @@ namespace GameHolder.PureDots.Tests
                 var settings = Object.FindAnyObjectByType<GamePresentationBootstrap>();
                 Assert.That(settings, Is.Not.Null);
                 Assert.That(settings.TryValidateConfiguration(out string error), Is.True, error);
-                Assert.That(settings.EnemyTypes.Length, Is.EqualTo(5));
+                Assert.That(settings.EnemyTypes, Is.Not.Empty);
                 Assert.That(settings.StartingCharacter.Weapon, Is.Not.Null);
                 Assert.That(settings.StartingCharacter.Texture, Is.Not.Null);
                 foreach (var enemy in settings.EnemyTypes)

@@ -119,11 +119,16 @@ namespace GameHolder.PureDots
         private NativeList<Entity> m_Deactivations;
         private NativeParallelHashMap<Entity, float> m_AreaDamage;
         private NativeParallelHashMap<Unity.Mathematics.int2, int> m_GemOverflowSlots;
+        private NativeList<int> m_CrowdCandidates;
         private bool m_Bound;
         private ComponentLookup<SimulationRunState> m_ReadRun;
         private ComponentLookup<EnemyActiveTag> m_ReadEnemies;
         private ComponentLookup<TypeId> m_ReadTypes;
         private ComponentLookup<EnemyRangedCooldown> m_ReadRangedCooldown;
+        private ComponentLookup<LaserBeam> m_ReadLasers;
+        private ComponentLookup<ExplosiveProjectile> m_ReadExplosives;
+        private ComponentLookup<PlayerStats> m_ReadStats;
+        private ComponentLookup<PlayerInvulnerability> m_ReadInvulnerability;
 
         public void OnCreate(ref SystemState state)
         {
@@ -133,6 +138,10 @@ namespace GameHolder.PureDots
             m_ReadEnemies = state.GetComponentLookup<EnemyActiveTag>(true);
             m_ReadTypes = state.GetComponentLookup<TypeId>(true);
             m_ReadRangedCooldown = state.GetComponentLookup<EnemyRangedCooldown>(true);
+            m_ReadLasers = state.GetComponentLookup<LaserBeam>(true);
+            m_ReadExplosives = state.GetComponentLookup<ExplosiveProjectile>(true);
+            m_ReadStats = state.GetComponentLookup<PlayerStats>(true);
+            m_ReadInvulnerability = state.GetComponentLookup<PlayerInvulnerability>(true);
         }
 
         [BurstCompile]
@@ -167,15 +176,18 @@ namespace GameHolder.PureDots
                 m_Deactivations = new NativeList<Entity>((playerProjectiles + enemyProjectiles) * 2, Allocator.Persistent);
                 m_AreaDamage = new NativeParallelHashMap<Entity, float>(enemies, Allocator.Persistent);
                 m_GemOverflowSlots = new NativeParallelHashMap<Unity.Mathematics.int2, int>(enemies, Allocator.Persistent);
+                m_CrowdCandidates = new NativeList<int>(enemies, Allocator.Persistent);
                 m_Bound = true;
             }
             m_Access.Update(ref state);
             m_ReadRun.Update(ref state); m_ReadEnemies.Update(ref state);
             m_ReadTypes.Update(ref state);
             m_ReadRangedCooldown.Update(ref state);
+            m_ReadLasers.Update(ref state); m_ReadExplosives.Update(ref state);
+            m_ReadStats.Update(ref state); m_ReadInvulnerability.Update(ref state);
             float dt = SystemAPI.Time.DeltaTime;
-            // Unsafe containers are deliberately shared: every producer and consumer is in this chain.
-            JobHandle chain = new SimulationControlJob { A = m_Access, Dt = dt }.Schedule(state.Dependency);
+            // Parallel producers use queue writers; every consumer stays behind its producers' handles.
+            JobHandle chain = new SimulationControlJob { A = m_Access, CrowdCandidates = m_CrowdCandidates, Dt = dt }.Schedule(state.Dependency);
             chain = new PredictiveWaveSpawnJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new MoveEnemiesJob
             {
@@ -185,7 +197,9 @@ namespace GameHolder.PureDots
                 Types = m_ReadTypes, Run = m_ReadRun, RangedCooldown = m_ReadRangedCooldown,
                 State = m_Access.State, Catalog = m_Access.Catalog, Dt = dt
             }.Schedule(m_Access.EnemyPool.AllEnemies.Length, SimulationConstants.JobBatchSize, chain);
-            chain = new MoveProjectilesJob { A = m_Access, Dt = dt }.Schedule(chain);
+            chain = new MoveProjectilesJob { RunState = m_ReadRun, State = m_Access.State, Dt = dt,
+                Lasers = m_ReadLasers, Explosives = m_ReadExplosives,
+                Deactivations = m_Access.Deactivations.AsParallelWriter() }.ScheduleParallel(chain);
             chain = new RebuildSpatialGridJob { A = m_Access }.Schedule(chain);
             chain = new CrowdContactJob
             {
@@ -197,7 +211,13 @@ namespace GameHolder.PureDots
             // Combat must see resolved contacts and include their displacement in relative projectile sweeps.
             chain = new RebuildSpatialGridJob { A = m_Access }.Schedule(chain);
             chain = new PlayerHitCheckJob { A = m_Access }.Schedule(chain);
-            chain = new ProjectileBroadphaseJob { A = m_Access }.Schedule(chain);
+            chain = new EnemyProjectileHitJob { RunState = m_ReadRun, State = m_Access.State,
+                Stats = m_ReadStats, Invulnerability = m_ReadInvulnerability,
+                Explosives = m_ReadExplosives, Lasers = m_ReadLasers,
+                Damage = m_Access.PlayerDamage.AsParallelWriter(), Deactivations = m_Access.Deactivations.AsParallelWriter() }.ScheduleParallel(chain);
+            chain = new ProjectileBroadphaseJob { RunState = m_ReadRun, State = m_Access.State, Grid = m_Access.Grid,
+                Explosives = m_ReadExplosives, Lasers = m_ReadLasers,
+                Damage = m_Access.Damage.AsParallelWriter(), Deactivations = m_Access.Deactivations.AsParallelWriter() }.ScheduleParallel(chain);
             chain = new ExplosiveCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new LaserCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new DamageResolutionJob { A = m_Access, Damage = m_Damage, Deactivations = m_Deactivations, AreaDamage = m_AreaDamage }.Schedule(chain);
@@ -217,6 +237,7 @@ namespace GameHolder.PureDots
             if (m_Deactivations.IsCreated) m_Deactivations.Dispose();
             if (m_AreaDamage.IsCreated) m_AreaDamage.Dispose();
             if (m_GemOverflowSlots.IsCreated) m_GemOverflowSlots.Dispose();
+            if (m_CrowdCandidates.IsCreated) m_CrowdCandidates.Dispose();
         }
     }
 }

@@ -77,33 +77,26 @@ namespace GameHolder.PureDots
         }
     }
     [BurstCompile]
-    public struct MoveProjectilesJob : IJob
+    [WithAll(typeof(ProjectileActiveTag))]
+    public partial struct MoveProjectilesJob : IJobEntity
     {
-        public SimulationAccess A;
+        [ReadOnly] public ComponentLookup<SimulationRunState> RunState;
+        [ReadOnly] public ComponentLookup<LaserBeam> Lasers;
+        [ReadOnly] public ComponentLookup<ExplosiveProjectile> Explosives;
+        public UnsafeQueue<Entity>.ParallelWriter Deactivations;
+        public Entity State;
         public float Dt;
-        public void Execute()
+        public void Execute(Entity e, ref LocalTransform transform, ref PreviousPosition previous,
+            ref ProjectileData projectile, in MovementVelocity velocity)
         {
-            if (A.Run[A.State].Paused) return;
-            Move(A.PlayerPool.AllProjectiles); Move(A.EnemyProjectilePool.AllProjectiles);
-        }
-        private void Move(UnsafeList<Entity> entities)
-        {
-            for (int i = 0; i < entities.Length; i++)
-            {
-                Entity e = entities[i];
-                if (!A.Projectiles.IsComponentEnabled(e)) continue;
-                if (A.Lasers.IsComponentEnabled(e) && A.Lasers[e].Charging != 0) continue;
-                var transform = A.Transforms[e];
-                A.Previous[e] = new PreviousPosition { Value = transform.Position.xy };
-                var projectile = A.ProjectileData[e];
-                projectile.ActiveStepFraction = Dt > 0 ? math.saturate(projectile.RemainingLifetime / Dt) : 1;
-                transform.Position.xy += A.Velocities[e].Value * (Dt * projectile.ActiveStepFraction); transform.Position.z = 0;
-                A.Transforms[e] = transform;
-                projectile.RemainingLifetime -= Dt; A.ProjectileData[e] = projectile;
-                // Undetonated explosives resolve their expiry in the combat stage.
-                if (projectile.RemainingLifetime <= 0 && !(A.Explosives.HasComponent(e) &&
-                    A.Explosives.IsComponentEnabled(e) && A.Explosives[e].Detonated == 0)) A.Deactivations.Enqueue(e);
-            }
+            if (RunState[State].Paused || Lasers.IsComponentEnabled(e) && Lasers[e].Charging != 0) return;
+            previous.Value = transform.Position.xy;
+            projectile.ActiveStepFraction = Dt > 0 ? math.saturate(projectile.RemainingLifetime / Dt) : 1;
+            transform.Position.xy += velocity.Value * (Dt * projectile.ActiveStepFraction); transform.Position.z = 0;
+            projectile.RemainingLifetime -= Dt;
+            // Undetonated explosives resolve their expiry in the combat stage.
+            if (projectile.RemainingLifetime <= 0 && !(Explosives.HasComponent(e) &&
+                Explosives.IsComponentEnabled(e) && Explosives[e].Detonated == 0)) Deactivations.Enqueue(e);
         }
     }
 }

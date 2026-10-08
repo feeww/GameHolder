@@ -1,4 +1,5 @@
 using Unity.Burst;
+using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
@@ -10,6 +11,7 @@ namespace GameHolder.PureDots
     public struct SimulationControlJob : IJob
     {
         public SimulationAccess A;
+        public NativeList<int> CrowdCandidates;
         public float Dt;
         public void Execute()
         {
@@ -79,7 +81,7 @@ namespace GameHolder.PureDots
             run.PreviousPlayerPosition = A.Transforms[run.Player].Position.xy;
             float2 movement = A.Input[A.InputEntity].Movement;
             run.PlayerVelocity = stats.IsDead == 0 ? movement / math.max(1, math.length(movement)) * stats.MoveSpeed : float2.zero;
-            run.PlayerVelocity *= CrowdSpeedScale(run.PreviousPlayerPosition, run.PlayerVelocity * Dt, run.PlayerCollisionRadius);
+            run.PlayerVelocity *= CrowdSpeedScale(run.PreviousPlayerPosition, run.PlayerVelocity * Dt, run.PlayerCollisionRadius, run.MaxEnemyRadius);
             run.PlayerPosition = run.PreviousPlayerPosition + run.PlayerVelocity * Dt;
             if (run.ForceRebase != 0 || math.lengthsq(run.PlayerPosition) > SimulationConstants.FloatingOriginThresholdSq)
             {
@@ -102,18 +104,32 @@ namespace GameHolder.PureDots
             run.Tick++;
             A.Run[A.State] = run;
         }
-        private float CrowdSpeedScale(float2 position, float2 step, float playerRadius)
+        private float CrowdSpeedScale(float2 position, float2 step, float playerRadius, float maxEnemyRadius)
         {
             float stepSq = math.lengthsq(step);
             if (stepSq < NumericalConstants.MinimumSweepLengthSq) return 1;
             float stepLength = math.sqrt(stepSq);
             float2 direction = step / stepLength;
             float load = 0, pushScale = 1;
-            // One exact O(N) sweep for the player; density must not be truncated by the enemy query budget.
-            for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
+            float padding = playerRadius + maxEnemyRadius + CrowdConstants.PlayerContactSkin + CrowdConstants.CrowdSteeringMargin;
+            int2 min = SpatialHashUtils.QuantizeToCell(math.min(position, position + step) - padding);
+            int2 max = SpatialHashUtils.QuantizeToCell(math.max(position, position + step) + padding);
+            CrowdCandidates.Clear();
+            for (int y = min.y; y <= max.y; y++)
+            for (int x = min.x; x <= max.x; x++)
             {
-                Entity e = A.EnemyPool.AllEnemies[i];
-                if (!A.Enemies.IsComponentEnabled(e)) continue;
+                if (!A.Grid.TryGetFirstValue(SpatialHashUtils.ComputeHash(x, y), out var entry, out var iterator)) continue;
+                do
+                {
+                    if (math.any(entry.CellCoord != new int2(x, y)) || !A.Enemies.IsComponentEnabled(entry.Entity)) continue;
+                    CrowdCandidates.AddNoResize(entry.PoolIndex);
+                } while (A.Grid.TryGetNextValue(out entry, ref iterator));
+            }
+            // Keep the original accumulation order without limiting dense-cell contacts.
+            CrowdCandidates.AsArray().Sort();
+            for (int i = 0; i < CrowdCandidates.Length; i++)
+            {
+                Entity e = A.EnemyPool.AllEnemies[CrowdCandidates[i]];
                 float2 offset = A.Transforms[e].Position.xy - position;
                 if (math.dot(offset, direction) < 0) continue;
                 var config = A.Catalog.Value.GetConfig(A.Types[e]);

@@ -46,14 +46,14 @@ namespace GameHolder.PureDots
             if (!SystemAPI.HasSingleton<WaveSpawnerConfig>())
                 em.AddComponentData(em.CreateEntity(), RunDefaults.Wave);
 
-            // 5. Spatial Hash Grids (2x over-provisioning for load factor <= 0.5)
+            // Each enemy writes one grid entry and at most five crowd-cell keys.
             int maxEnemies = limits.MaxEnemies;
 
             var enemyGridEntity = em.CreateEntity();
             em.AddComponentData(enemyGridEntity, new EnemySpatialGridSingleton
             {
-                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxEnemies * 2, Allocator.Persistent),
-                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(maxEnemies * 8, Allocator.Persistent)
+                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxEnemies, Allocator.Persistent),
+                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(maxEnemies * 5, Allocator.Persistent)
             });
 
             // 6. Combat queues

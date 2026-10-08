@@ -1,36 +1,37 @@
 using Unity.Burst;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
-using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Transforms;
 
 namespace GameHolder.PureDots
 {
     [BurstCompile]
-    public struct ProjectileBroadphaseJob : IJob
+    [WithAll(typeof(PlayerProjectileTag), typeof(ProjectileActiveTag))]
+    public partial struct ProjectileBroadphaseJob : IJobEntity
     {
-        public SimulationAccess A;
-        public void Execute()
+        [ReadOnly] public ComponentLookup<SimulationRunState> RunState;
+        [ReadOnly] public ComponentLookup<ExplosiveProjectile> Explosives;
+        [ReadOnly] public ComponentLookup<LaserBeam> Lasers;
+        [ReadOnly] public UnsafeParallelMultiHashMap<uint, GridEntry> Grid;
+        public UnsafeQueue<DamageEvent>.ParallelWriter Damage;
+        public UnsafeQueue<Entity>.ParallelWriter Deactivations;
+        public Entity State;
+        public void Execute(Entity projectile, in LocalTransform transform, in PreviousPosition previous, in ProjectileData data)
         {
-            var run = A.Run[A.State];
-            if (run.Paused) return;
-            for (int i = 0; i < A.PlayerPool.AllProjectiles.Length; i++)
-            {
-                Entity projectile = A.PlayerPool.AllProjectiles[i];
-                if (!A.Projectiles.IsComponentEnabled(projectile) || A.Explosives.IsComponentEnabled(projectile) ||
-                    A.Lasers.IsComponentEnabled(projectile)) continue;
-                float2 start = A.Previous[projectile].Value, end = A.Transforms[projectile].Position.xy;
-                var data = A.ProjectileData[projectile];
-                if (data.ActiveStepFraction <= 0 || !ProjectileCollision.FirstHit(A, start, end, data.Radius,
-                    data.ActiveStepFraction, run, out Entity target, out _)) continue;
-                A.Damage.Enqueue(new DamageEvent { TargetEntity = target, TargetKey = DamageEvent.CreateTargetKey(target), Damage = data.Damage });
-                A.Deactivations.Enqueue(projectile);
-            }
+            var run = RunState[State];
+            if (run.Paused || Explosives.IsComponentEnabled(projectile) || Lasers.IsComponentEnabled(projectile)) return;
+            if (data.ActiveStepFraction <= 0 || !ProjectileCollision.FirstHit(Grid, previous.Value, transform.Position.xy, data.Radius,
+                data.ActiveStepFraction, run, out Entity target, out _)) return;
+            Damage.Enqueue(new DamageEvent { TargetEntity = target, TargetKey = DamageEvent.CreateTargetKey(target), Damage = data.Damage });
+            Deactivations.Enqueue(projectile);
         }
     }
 
     public static class ProjectileCollision
     {
-        public static bool FirstHit(SimulationAccess a, float2 start, float2 end, float radius, float stepFraction, SimulationRunState run,
+        public static bool FirstHit(UnsafeParallelMultiHashMap<uint, GridEntry> grid, float2 start, float2 end, float radius, float stepFraction, SimulationRunState run,
             out Entity target, out float bestTime)
         {
             float padding = radius + run.MaxEnemyRadius + run.MaxEnemyStep;
@@ -40,7 +41,7 @@ namespace GameHolder.PureDots
             for (int y = min.y; y <= max.y; y++)
                 for (int x = min.x; x <= max.x; x++)
                 {
-                    if (!a.Grid.TryGetFirstValue(SpatialHashUtils.ComputeHash(x, y), out var entry, out var iterator)) continue;
+                    if (!grid.TryGetFirstValue(SpatialHashUtils.ComputeHash(x, y), out var entry, out var iterator)) continue;
                     do
                     {
                         if (math.any(entry.CellCoord != new int2(x, y))) continue;
@@ -49,7 +50,7 @@ namespace GameHolder.PureDots
                         ulong key = DamageEvent.CreateTargetKey(entry.Entity);
                         if (time < bestTime || time == bestTime && key < bestKey)
                         { target = entry.Entity; bestTime = time; bestKey = key; }
-                    } while (a.Grid.TryGetNextValue(out entry, ref iterator));
+                    } while (grid.TryGetNextValue(out entry, ref iterator));
                 }
             return target != Entity.Null;
         }
