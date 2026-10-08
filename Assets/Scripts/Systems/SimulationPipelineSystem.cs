@@ -123,6 +123,7 @@ namespace GameHolder.PureDots
         private ComponentLookup<SimulationRunState> m_ReadRun;
         private ComponentLookup<EnemyActiveTag> m_ReadEnemies;
         private ComponentLookup<TypeId> m_ReadTypes;
+        private ComponentLookup<EnemyRangedCooldown> m_ReadRangedCooldown;
 
         public void OnCreate(ref SystemState state)
         {
@@ -131,6 +132,7 @@ namespace GameHolder.PureDots
             m_ReadRun = state.GetComponentLookup<SimulationRunState>(true);
             m_ReadEnemies = state.GetComponentLookup<EnemyActiveTag>(true);
             m_ReadTypes = state.GetComponentLookup<TypeId>(true);
+            m_ReadRangedCooldown = state.GetComponentLookup<EnemyRangedCooldown>(true);
             m_Damage = new NativeList<DamageEvent>(SimulationConstants.DamageBufferCapacity, Allocator.Persistent);
             m_Deactivations = new NativeList<Entity>(SimulationConstants.DeactivationBufferCapacity, Allocator.Persistent);
             m_AreaDamage = new NativeParallelHashMap<Entity, float>(SimulationConstants.MaxEnemies, Allocator.Persistent);
@@ -167,6 +169,7 @@ namespace GameHolder.PureDots
             m_Access.Update(ref state);
             m_ReadRun.Update(ref state); m_ReadEnemies.Update(ref state);
             m_ReadTypes.Update(ref state);
+            m_ReadRangedCooldown.Update(ref state);
             float dt = SystemAPI.Time.DeltaTime;
             // Unsafe containers are deliberately shared: every producer and consumer is in this chain.
             JobHandle chain = new SimulationControlJob { A = m_Access, Dt = dt }.Schedule(state.Dependency);
@@ -176,7 +179,7 @@ namespace GameHolder.PureDots
                 Entities = m_Access.EnemyPool.AllEnemies, Transforms = m_Access.Transforms,
                 Previous = m_Access.Previous, Velocities = m_Access.Velocities, Separation = m_Access.Separation,
                 Cooldown = m_Access.MeleeCooldown, Active = m_ReadEnemies,
-                Types = m_ReadTypes, Run = m_ReadRun,
+                Types = m_ReadTypes, Run = m_ReadRun, RangedCooldown = m_ReadRangedCooldown,
                 State = m_Access.State, Catalog = m_Access.Catalog, Dt = dt
             }.Schedule(m_Access.EnemyPool.AllEnemies.Length, SimulationConstants.JobBatchSize, chain);
             chain = new MoveProjectilesJob { A = m_Access, Dt = dt }.Schedule(chain);

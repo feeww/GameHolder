@@ -24,7 +24,7 @@ namespace GameHolder.PureDots.Tests
         private double m_Time;
         private UnsafeQueue<SimulationCommand> m_Commands;
 
-        private const uint TankType = 0, RunnerType = 1;
+        private const uint TankType = 0, RunnerType = 1, LaserType = 4;
         private static StartingPlayerConfig DefaultPlayer => UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterDefinition>(
             "Assets/GameData/Characters/DefaultCharacter.asset").ToConfig();
         private static PlayerWeapon TestWeapon(WeaponType type) => UnityEditor.AssetDatabase.LoadAssetAtPath<CharacterWeaponDefinition>(
@@ -59,7 +59,7 @@ namespace GameHolder.PureDots.Tests
                 artifacts: artifacts, artifactChests: new ArtifactChestSettings { ChoicesPerChest = 3 }) });
             var builder = new BlobBuilder(Allocator.Temp);
             ref var root = ref builder.ConstructRoot<EnemyConfigCatalog>();
-            var names = new[] { "Tank", "Runner", "Skirmisher", "Sniper" };
+            var names = new[] { "Tank", "Runner", "Skirmisher", "Sniper", "Laser" };
             var configs = builder.Allocate(ref root.Configs, names.Length);
             float threshold = 0;
             for (int i = 0; i < names.Length; i++)
@@ -676,6 +676,13 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(math.distance(matrix.c1.xy, new float2(18, 0)), Is.LessThan(.001f));
                 Assert.That(math.length(matrix.c0.xyz), Is.EqualTo(.3f).Within(.001f));
                 Assert.That(m_Em.GetComponentData<MaterialMeshInfo>(e).Material, Is.EqualTo(MaterialMeshInfo.FromRenderMeshArrayIndices(1, 0).Material));
+                m_Em.SetComponentData(e, new LaserBeam { Direction = new float2(1, 0), Length = 18, Charging = 1 });
+                m_Em.SetComponentData(e, new ProjectileData { Radius = .15f, Color = new float4(1) });
+                renderer.Update(); m_Em.CompleteAllTrackedJobs();
+                matrix = m_Em.GetComponentData<LocalToWorld>(e).Value;
+                Assert.That(math.distance(matrix.c1.xy, new float2(18, 0)), Is.LessThan(.001f));
+                Assert.That(math.length(matrix.c0.xyz), Is.EqualTo(.075f).Within(.001f));
+                Assert.That(m_Em.GetComponentData<BaseColorOverride>(e).Value.w, Is.EqualTo(.5f));
                 m_Em.SetComponentEnabled<LaserBeam>(e, false);
                 renderer.Update(); m_Em.CompleteAllTrackedJobs();
                 Assert.That(m_Em.GetComponentData<MaterialMeshInfo>(e).Material, Is.EqualTo(MaterialMeshInfo.FromRenderMeshArrayIndices(0, 0).Material));
@@ -773,7 +780,7 @@ namespace GameHolder.PureDots.Tests
                 var settings = Object.FindAnyObjectByType<GamePresentationBootstrap>();
                 Assert.That(settings, Is.Not.Null);
                 Assert.That(settings.TryValidateConfiguration(out string error), Is.True, error);
-                Assert.That(settings.EnemyTypes.Length, Is.EqualTo(4));
+                Assert.That(settings.EnemyTypes.Length, Is.EqualTo(5));
                 Assert.That(settings.StartingCharacter.Weapon, Is.Not.Null);
                 Assert.That(settings.StartingCharacter.Texture, Is.Not.Null);
                 foreach (var enemy in settings.EnemyTypes)
@@ -850,6 +857,11 @@ namespace GameHolder.PureDots.Tests
                 spawning.FindPropertyRelative("EnableLargeSpawns").boolValue = true;
                 spawning.FindPropertyRelative("LargeSpawnInterval").floatValue = 1;
                 spawning.FindPropertyRelative("LargeSpawnCount").intValue = 4;
+                if (enemyWeaponType == WeaponType.Laser)
+                {
+                    spawning.FindPropertyRelative("MinRadius").floatValue = 5;
+                    spawning.FindPropertyRelative("MaxRadius").floatValue = 6;
+                }
                 character.MaxHealth = 250; character.MoveSpeed = 8; character.InvulnerabilityDuration = .5f;
                 character.CollisionRadius = .65f; character.RespawnGracePeriod = 2.75f;
                 character.Texture = Texture2D.whiteTexture;
@@ -898,10 +910,12 @@ namespace GameHolder.PureDots.Tests
                 using (var projectiles = em.CreateEntityQuery(typeof(ProjectileActiveTag), typeof(EnemyProjectileTag)).ToEntityArray(Allocator.Temp))
                     foreach (var projectile in projectiles)
                     {
-                        Assert.That(em.GetComponentData<ProjectileData>(projectile).Damage, Is.EqualTo(9));
+                        Assert.That(em.GetComponentData<ProjectileData>(projectile).Damage, Is.EqualTo(enemyWeaponType == WeaponType.Laser ? 0 : 9));
                         Assert.That(em.GetComponentData<ProjectileData>(projectile).Color, Is.EqualTo(new float4(.2f, .3f, .7f, .8f)));
                         Assert.That(em.IsComponentEnabled<ExplosiveProjectile>(projectile), Is.EqualTo(enemyWeaponType == WeaponType.Explosive));
                         Assert.That(em.IsComponentEnabled<LaserBeam>(projectile), Is.EqualTo(enemyWeaponType == WeaponType.Laser));
+                        if (enemyWeaponType == WeaponType.Laser)
+                            Assert.That(em.GetComponentData<LaserBeam>(projectile).Charging, Is.EqualTo(1));
                     }
                 var stats = em.GetComponentData<PlayerStats>(player); stats.MaxHealth = 999; em.SetComponentData(player, stats);
                 commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Restart });

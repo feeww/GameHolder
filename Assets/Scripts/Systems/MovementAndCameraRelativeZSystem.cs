@@ -15,6 +15,7 @@ namespace GameHolder.PureDots
         [ReadOnly] public ComponentLookup<EnemyActiveTag> Active;
         [ReadOnly] public ComponentLookup<TypeId> Types;
         [ReadOnly] public ComponentLookup<SimulationRunState> Run;
+        [ReadOnly] public ComponentLookup<EnemyRangedCooldown> RangedCooldown;
         public Entity State;
         public BlobAssetReference<EnemyConfigCatalog> Catalog;
         public float Dt;
@@ -36,7 +37,16 @@ namespace GameHolder.PureDots
             float distance = math.sqrt(distanceSq);
             float2 direction = math.normalizesafe(toPlayer);
             var config = Catalog.Value.GetConfig(Types[e]);
+            bool laser = config.Weapon.Type == WeaponType.Laser;
+            float stoppingDistance = laser ? config.MeleeStoppingDistance : config.AttackRange;
+            float laserRange = math.min(config.AttackRange, CombatConstants.EnemyLaserMaximumRange);
+            if (laser && RangedCooldown[e].ChargeBeam != Entity.Null &&
+                distanceSq > CombatConstants.EnemyLaserMinimumRange * CombatConstants.EnemyLaserMinimumRange &&
+                distanceSq <= laserRange * laserRange)
+            { Velocities[e] = default; return; }
             float baseSpeed = config.MoveSpeed;
+            if (laser && distanceSq <= CombatConstants.EnemyLaserMinimumRange * CombatConstants.EnemyLaserMinimumRange)
+                baseSpeed *= CombatConstants.EnemyLaserMeleeSpeedMultiplier;
             var separation = Separation[e];
             float speed = baseSpeed;
             if (distanceSq > CrowdConstants.Tier1RadiusSq)
@@ -46,18 +56,18 @@ namespace GameHolder.PureDots
                     (CrowdConstants.Tier2MaxRadiusSq - CrowdConstants.Tier1RadiusSq));
                 speed *= math.lerp(1, CrowdConstants.MaxCatchUpMultiplier, t);
             }
-            if (config.RetreatRange > 0 && distanceSq < config.RetreatRange * config.RetreatRange)
+            if (!laser && config.RetreatRange > 0 && distanceSq < config.RetreatRange * config.RetreatRange)
             {
                 direction = -direction;
                 speed = math.min(speed, (config.RetreatRange - distance) / math.max(Dt, NumericalConstants.MinimumDivisor));
             }
-            else speed = math.min(speed, math.max(0, distance - config.AttackRange) / math.max(Dt, NumericalConstants.MinimumDivisor));
+            else speed = math.min(speed, math.max(0, distance - stoppingDistance) / math.max(Dt, NumericalConstants.MinimumDivisor));
             speed *= math.min(1, CrowdConstants.CrowdTargetDensity / math.max(CrowdConstants.CrowdTargetDensity, separation.Density));
             // Blocked approaches split around the player instead of continually driving into the centre.
             float2 tangent = new float2(-direction.y, direction.x);
             float side = math.dot(separation.Direction, tangent);
             if (math.abs(side) < CrowdConstants.SideSelectionThreshold) side = (index & 1) == 0 ? 1 : -1;
-            float routing = math.smoothstep(0, CrowdConstants.CrowdPackingRange, math.max(0, distance - config.AttackRange));
+            float routing = math.smoothstep(0, CrowdConstants.CrowdPackingRange, math.max(0, distance - stoppingDistance));
             routing *= CrowdConstants.CrowdTargetDensity / (CrowdConstants.CrowdTargetDensity + separation.Density);
             float2 velocity = direction * speed + tangent * (side * baseSpeed * separation.Weight * CrowdConstants.LateralSteeringScale * routing);
             float length = math.length(velocity);
@@ -82,6 +92,7 @@ namespace GameHolder.PureDots
             {
                 Entity e = entities[i];
                 if (!A.Projectiles.IsComponentEnabled(e)) continue;
+                if (A.Lasers.IsComponentEnabled(e) && A.Lasers[e].Charging != 0) continue;
                 var transform = A.Transforms[e];
                 A.Previous[e] = new PreviousPosition { Value = transform.Position.xy };
                 var projectile = A.ProjectileData[e];

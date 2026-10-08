@@ -16,7 +16,11 @@ namespace GameHolder.PureDots.Editor
                 var weapon = serializedObject.FindProperty("Weapon");
                 EditorGUILayout.PropertyField(weapon);
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("AttackRange"));
-                EditorGUILayout.PropertyField(serializedObject.FindProperty("RetreatRange"));
+                bool laser = weapon.objectReferenceValue is EnemyWeaponDefinition definition && definition.Type == WeaponType.Laser;
+                if (!laser || weapon.hasMultipleDifferentValues)
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("RetreatRange"));
+                if (laser || weapon.hasMultipleDifferentValues)
+                    EditorGUILayout.PropertyField(serializedObject.FindProperty("MeleeStoppingDistance"));
                 if (weapon.objectReferenceValue == null && !weapon.hasMultipleDifferentValues)
                     EditorGUILayout.HelpBox("Assign an enemy weapon asset for ranged attacks.", MessageType.Error);
             }

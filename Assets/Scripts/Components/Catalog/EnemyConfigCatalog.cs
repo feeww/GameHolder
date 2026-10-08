@@ -11,6 +11,7 @@ namespace GameHolder.PureDots
         public float CollisionRadius;
         public float Mass;
         public float AttackRange;
+        public float MeleeStoppingDistance;
         public float BaseDamage;
         public float ContactAttackInterval;
         public uint ExperienceValue;

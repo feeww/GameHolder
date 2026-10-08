@@ -10,22 +10,22 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dcf90a54b9281ff41834f33fe3a0c459, type: 3}
-  m_Name: Enemy1
+  m_Name: Laser
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyDefinition
-  MaxHealth: 25
-  MoveSpeed: 5.1
-  CollisionRadius: 0.35
-  Mass: 0.1
-  ContactDamage: 10
+  MaxHealth: 70
+  MoveSpeed: 2.8
+  CollisionRadius: 0.45
+  Mass: 2
+  ContactDamage: 15
   ContactAttackInterval: 1
   MeleeStoppingDistance: 0
-  ExperienceValue: 10
+  ExperienceValue: 20
   ChestDropChance: 0.01
-  SpawnWeight: 0.01
+  SpawnWeight: 0.15
   AvailableAfterSeconds: 0
   Ranged: 1
-  Weapon: {fileID: 11400000, guid: 2364c1eb06d6227428f985f97208f8a2, type: 2}
-  AttackRange: 0.9807532
+  Weapon: {fileID: 11400000, guid: e3f8b9e3a6cc4ef7ac8806e98b850cf7, type: 2}
+  AttackRange: 7
   RetreatRange: 0
-  Texture: {fileID: 2800000, guid: 23133fe0234887d44aaa0279c98c0f4d, type: 3}
-  Tint: {r: 0.1787443, g: 0.015686274, b: 1, a: 1}
+  Texture: {fileID: 2800000, guid: 97c82e6bc2b00bf49a7c2ecddca45b17, type: 3}
+  Tint: {r: 1, g: 1, b: 1, a: 1}

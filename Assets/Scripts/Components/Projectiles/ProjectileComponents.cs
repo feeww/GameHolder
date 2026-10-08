@@ -31,6 +31,7 @@ namespace GameHolder.PureDots
         public float2 Direction;
         public float Length;
         public byte PendingHit;
+        public byte Charging;
     }
 
     public struct PlayerProjectileTag : IComponentData

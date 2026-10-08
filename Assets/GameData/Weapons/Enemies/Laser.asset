@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: Laser
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyWeaponDefinition
   Type: 2
-  AttackInterval: 0.4
+  AttackInterval: 1.5
   Damage: 35
-  AttackRange: 18
+  AttackRange: 7
   ProjectileRadius: 0.15
   ProjectileSpeed: 0
-  ProjectileLifetime: 0.12
+  ProjectileLifetime: 0.15
   BlastRadius: 0
   ProjectileCount: 1
   SpreadAngle: 0
   WeaponTexture: {fileID: 2800000, guid: 7b7cd277593eeaa4cbbb27bc225b9cb4, type: 3}
   ProjectileTexture: {fileID: 0}
-  Tint: {r: 1, g: 0.2, b: 0.2, a: 1}
+  Tint: {r: 1, g: 0.08, b: 0.55, a: 1}

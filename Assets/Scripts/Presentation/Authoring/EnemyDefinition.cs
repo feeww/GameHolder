@@ -19,7 +19,7 @@ namespace GameHolder.PureDots
         [Min(0)] public float ContactDamage;
         [Tooltip("Seconds between this enemy's contact attacks.")]
         [Range(AuthoringLimits.MinimumAttackInterval, AuthoringLimits.MaximumAttackInterval)] public float ContactAttackInterval;
-        [Tooltip("Zero uses body contact distance. A larger value stops melee movement earlier.")]
+        [Tooltip("Zero uses body contact distance. A larger value stops melee movement earlier. Also applies to laser enemies.")]
         [Range(0, AuthoringLimits.MaximumRange)] public float MeleeStoppingDistance;
         [Tooltip("Whole XP points awarded on death, before elite scaling.")]
         [Min(0)] public int ExperienceValue;
@@ -35,9 +35,9 @@ namespace GameHolder.PureDots
         public bool Ranged;
         [Tooltip("Ranged attack weapon. Ignored by melee enemies.")]
         public EnemyWeaponDefinition Weapon;
-        [Tooltip("Preferred firing distance, limited by the assigned weapon's maximum range.")]
+        [Tooltip("Preferred firing distance, limited by the assigned weapon's maximum range. Lasers approach for melee and fire only beyond 3 and up to 7 meters, with a one-second charge.")]
         [Range(0, AuthoringLimits.MaximumRange)] public float AttackRange;
-        [Tooltip("Zero holds position; a positive value makes this enemy retreat inside that distance.")]
+        [Tooltip("Zero holds position; a positive value makes this enemy retreat inside that distance. Ignored by laser enemies.")]
         [Range(0, AuthoringLimits.MaximumRange)] public float RetreatRange;
 
         [Header("Appearance")]
@@ -66,14 +66,15 @@ namespace GameHolder.PureDots
             if (!TryValidate(out string error)) throw new InvalidOperationException(error);
             float radius = Mathf.Clamp(CollisionRadius, AuthoringLimits.MinimumBodyRadius, AuthoringLimits.MaximumBodyRadius);
             var weapon = Ranged ? Weapon.ToConfig() : default;
+            float meleeRange = Mathf.Max(Mathf.Clamp(MeleeStoppingDistance, 0, AuthoringLimits.MaximumRange), playerRadius + radius + CrowdConstants.PlayerContactSkin);
             float range = Ranged ? Mathf.Min(Mathf.Clamp(AttackRange, 0, AuthoringLimits.MaximumRange), weapon.Range)
-                : Mathf.Max(Mathf.Clamp(MeleeStoppingDistance, 0, AuthoringLimits.MaximumRange), playerRadius + radius + CrowdConstants.PlayerContactSkin);
+                : meleeRange;
             return new EnemyConfigData
             {
                 MaxHealth = Mathf.Max(AuthoringLimits.MinimumHealth, MaxHealth),
                 MoveSpeed = Mathf.Clamp(MoveSpeed, 0, AuthoringLimits.MaximumMoveSpeed),
                 CollisionRadius = radius, Mass = Mathf.Max(AuthoringLimits.MinimumMass, Mass),
-                AttackRange = range, BaseDamage = Mathf.Max(0, ContactDamage),
+                AttackRange = range, MeleeStoppingDistance = meleeRange, BaseDamage = Mathf.Max(0, ContactDamage),
                 ContactAttackInterval = Mathf.Clamp(ContactAttackInterval, AuthoringLimits.MinimumAttackInterval, AuthoringLimits.MaximumAttackInterval),
                 ExperienceValue = (uint)Mathf.Max(0, ExperienceValue),
                 ChestDropChance = Mathf.Clamp01(ChestDropChance),

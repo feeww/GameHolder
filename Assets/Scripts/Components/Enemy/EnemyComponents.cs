@@ -27,6 +27,8 @@ namespace GameHolder.PureDots
     public struct EnemyRangedCooldown : IComponentData
     {
         public float CooldownTimer;
+        public float ChargeTimer;
+        public Entity ChargeBeam;
     }
 
     public struct EnemyMeleeCooldown : IComponentData

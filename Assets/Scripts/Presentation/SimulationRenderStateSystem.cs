@@ -72,6 +72,7 @@ namespace GameHolder.PureDots
             {
                 rotation = quaternion.RotateZ(math.atan2(beam.Direction.y, beam.Direction.x) - math.PI * .5f);
                 scale = new float3(data.Radius * 2, beam.Length, 1);
+                if (beam.Charging != 0) { scale.x *= .25f; tint.w *= .5f; }
             }
             else
             {

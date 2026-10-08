@@ -195,6 +195,7 @@ namespace GameHolder.PureDots.Tests
                 m_Em.SetComponentData(enemy, new TypeId { Value = 2, IsElite = 1 });
                 m_Em.SetComponentData(enemy, new EnemyRangedCooldown());
                 Tick(0);
+                if (weaponType == WeaponType.Laser) Tick(CombatConstants.EnemyLaserChargeDuration);
                 using var projectiles = m_Em.CreateEntityQuery(typeof(EnemyProjectileTag), typeof(ProjectileActiveTag)).ToEntityArray(Allocator.Temp);
                 Assert.That(projectiles.Length, Is.GreaterThan(0));
                 foreach (Entity projectile in projectiles)

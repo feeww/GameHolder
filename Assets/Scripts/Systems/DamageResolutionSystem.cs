@@ -42,6 +42,9 @@ namespace GameHolder.PureDots
                 var health = A.Health[e]; health.Value -= amount; A.Health[e] = health;
                 if (health.Value > 0) continue;
                 A.Enemies.SetComponentEnabled(e, false); A.Ranged.SetComponentEnabled(e, false);
+                var ranged = A.RangedCooldown[e];
+                if (ranged.ChargeBeam != Entity.Null) A.Deactivations.Enqueue(ranged.ChargeBeam);
+                A.RangedCooldown[e] = default;
                 A.EnemyPool.InactiveEnemies.Enqueue(e); run.ActiveEnemies--; run.Kills++;
                 float2 position = A.Transforms[e].Position.xy; var type = A.Types[e];
                 var config = A.Catalog.Value.GetConfig(type);

@@ -10,5 +10,9 @@ namespace GameHolder.PureDots
         public const float InitialCooldownMinScale = .1f;
         public const float CooldownMinScale = .9f;
         public const float CooldownMaxScale = 1.1f;
+        public const float EnemyLaserMinimumRange = 3;
+        public const float EnemyLaserMaximumRange = 7;
+        public const float EnemyLaserChargeDuration = 1;
+        public const float EnemyLaserMeleeSpeedMultiplier = 1.15f;
     }
 }
