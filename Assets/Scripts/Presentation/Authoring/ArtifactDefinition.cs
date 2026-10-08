@@ -6,13 +6,16 @@ namespace GameHolder.PureDots
     [CreateAssetMenu(menuName = "Pure DOTS/Artifact", fileName = "NewArtifact")]
     public class ArtifactDefinition : ScriptableObject
     {
+        [Tooltip("Artifact inventory artwork. Empty hides the artifact icon.")]
         public Texture2D Texture;
         [Tooltip("Choose a rarity from Rarities & Drop Chances on the scene's Game Presentation Bootstrap.")]
         public int Rarity;
         [Tooltip("Normalized texture area displayed by the inventory icon. Crop transparent margins without changing the source image.")]
         public Rect IconUV = new Rect(0, 0, 1, 1);
         [Header("Additive bonuses per collected copy")]
+        [Tooltip("Health points added per collected copy; current health increases by the same amount.")]
         [Min(0)] public float MaxHealth;
+        [Tooltip("World units added to pickup radius per collected copy.")]
         [Min(0)] public float PickupRadius;
         [Tooltip("Health recovered per second while alive and the run is unpaused.")]
         [Min(0)] public float HealthRegeneration;
@@ -36,6 +39,7 @@ namespace GameHolder.PureDots
     [System.Serializable]
     public class ArtifactChestSettings
     {
+        [Tooltip("Chest artwork. Empty uses the generated default chest.")]
         public Texture2D Texture;
         [Tooltip("Choose one artifact per chest. Offers are distinct; fewer cards appear when the eligible roster is smaller.")]
         [Range(1, RewardSelection.MaxChoices)] public int ChoicesPerChest = 2;

@@ -6,7 +6,9 @@ namespace GameHolder.PureDots
     {
         public static CameraPresentationController Instance { get; private set; }
 
+        [Tooltip("Camera followed by this controller. Empty uses Main Camera.")]
         [SerializeField] private Camera m_TargetCamera;
+        [Tooltip("Follow response per second. Higher follows faster; zero snaps to the player.")]
         [SerializeField] private float m_SmoothSpeed = PresentationConstants.CameraSmoothSpeed;
 
         private void Awake()

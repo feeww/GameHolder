@@ -25,6 +25,7 @@ namespace GameHolder.PureDots.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Texture"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Tint"));
             serializedObject.ApplyModifiedProperties();
+            if (!((EnemyDefinition)target).TryValidate(out string error)) EditorGUILayout.HelpBox(error, MessageType.Error);
         }
     }
 }

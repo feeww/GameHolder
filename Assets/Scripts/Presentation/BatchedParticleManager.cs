@@ -6,8 +6,11 @@ namespace GameHolder.PureDots
     {
         public static BatchedParticleManager Instance { get; private set; }
 
+        [Tooltip("Death effects. Empty creates a generated particle system.")]
         [SerializeField] private ParticleSystem m_DeathParticleSystem;
+        [Tooltip("Player hit effects. Empty creates a generated particle system.")]
         [SerializeField] private ParticleSystem m_HitParticleSystem;
+        [Tooltip("Gem collection effects. Empty creates a generated particle system.")]
         [SerializeField] private ParticleSystem m_GemCollectParticleSystem;
 
         private ParticleSystem.Particle[] m_ParticlesBuffer;

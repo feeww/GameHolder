@@ -105,4 +105,5 @@ Shader "PureDots/SpriteDOTS"
             ENDHLSL
         }
     }
+    CustomEditor "GameHolder.PureDots.Editor.PureDotsShaderGUI"
 }

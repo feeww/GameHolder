@@ -19,6 +19,6 @@ MonoBehaviour:
   InvulnerabilityDuration: 0
   RespawnGracePeriod: 1.5
   Weapon: {fileID: 11400000, guid: 829b464ec0ad634469064ca1ddb370df, type: 2}
-  Texture: {fileID: 2800000, guid: b3473cabde177f54eabcf0efe7f24453, type: 3}
+  Texture: {fileID: 2800000, guid: 4e0afe49ab67b3d418d63a02878d46e5, type: 3}
   Tint: {r: 1, g: 1, b: 1, a: 1}
   UpgradableStats: 1

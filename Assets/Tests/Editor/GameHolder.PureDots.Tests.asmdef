@@ -1,6 +1,6 @@
 {
   "name": "GameHolder.PureDots.Tests",
-  "references": ["GameHolder.PureDots", "GameHolder.PureDots.Bootstrap", "GameHolder.PureDots.Presentation", "Unity.Entities", "Unity.Mathematics", "Unity.Collections", "Unity.Transforms", "Unity.Burst", "Unity.Entities.Graphics", "UnityEngine.UI"],
+  "references": ["GameHolder.PureDots", "GameHolder.PureDots.Bootstrap", "GameHolder.PureDots.Presentation", "GameHolder.PureDots.Editor", "Unity.Entities", "Unity.Mathematics", "Unity.Collections", "Unity.Transforms", "Unity.Burst", "Unity.Entities.Graphics", "UnityEngine.UI"],
   "includePlatforms": ["Editor"],
   "optionalUnityReferences": ["TestAssemblies"],
   "allowUnsafeCode": true

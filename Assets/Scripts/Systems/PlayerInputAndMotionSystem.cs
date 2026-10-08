@@ -145,7 +145,7 @@ namespace GameHolder.PureDots
             { Timer = A.StartingPlayer.RespawnGracePeriod, InvulnerabilityDuration = A.StartingPlayer.InvulnerabilityDuration };
             A.Transforms[player] = LocalTransform.Identity;
             A.Previous[player] = default;
-            A.Waves[A.Wave] = RunDefaults.Wave;
+            A.Waves[A.Wave] = A.StartingWave;
             A.Grid.Clear(); A.CrowdCells.Clear(); A.Damage.Clear(); A.PlayerDamage.Clear(); A.Deactivations.Clear(); A.GemSpawns.Clear();
             A.Bridge.DeathEventQueue.Clear(); A.Bridge.HitReactionEventQueue.Clear();
             A.Bridge.GemCollectEventQueue.Clear(); A.Bridge.RebaseEventQueue.Clear();

@@ -396,6 +396,20 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 23188b466d3743dcba02b9aa8bbfbb7b, type: 2}
   - {fileID: 11400000, guid: 77b4a281c9464fc58ef1dbf88be402f3, type: 2}
   - {fileID: 11400000, guid: 7e45f64d791a4da2a5d2e3e92f0cb14f, type: 2}
+  m_EnemySpawning:
+    SpawnInterval: 0.5
+    BatchSize: 35
+    MinRadius: 18
+    MaxRadius: 40
+    SpawnRateScalingInterval: 0
+    SpawnRateMultiplier: 1
+    StatScalingInterval: 0
+    HealthMultiplier: 1
+    SpeedMultiplier: 1
+    DamageMultiplier: 1
+    EnableLargeSpawns: 0
+    LargeSpawnInterval: 30
+    LargeSpawnCount: 100
   m_EliteSpawnProbability: 0.25
   m_EliteHealthMultiplier: 2
   m_EliteSpeedMultiplier: 1.25

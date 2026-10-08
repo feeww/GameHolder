@@ -50,6 +50,7 @@ namespace GameHolder.PureDots
         public SimulationBridgeQueuesSingleton Bridge;
         public BlobAssetReference<EnemyConfigCatalog> Catalog;
         public StartingPlayerConfig StartingPlayer;
+        public WaveSpawnerConfig StartingWave;
         public BlobAssetReference<RewardCatalog> Rewards;
         public TemporaryZoneConfig Zones;
 
@@ -143,6 +144,7 @@ namespace GameHolder.PureDots
             {
                 m_Access.State = SystemAPI.GetSingletonEntity<SimulationRunState>();
                 m_Access.Wave = SystemAPI.GetSingletonEntity<WaveSpawnerConfig>();
+                m_Access.StartingWave = SystemAPI.GetSingleton<WaveSpawnerConfig>();
                 m_Access.InputEntity = SystemAPI.GetSingletonEntity<SimulationInput>();
                 m_Access.EnemyPool = SystemAPI.GetSingleton<EnemyPoolSingleton>();
                 m_Access.PlayerPool = SystemAPI.GetSingleton<PlayerProjectilePoolSingleton>();

@@ -11,10 +11,12 @@ namespace GameHolder.PureDots
     public class RewardTierSettings
     {
         [HideInInspector] public int Id = -1;
+        [Tooltip("Displayed rarity name. Names must be unique.")]
         public string Name;
         [Tooltip("Relative drop chance for upgrades and artifacts. Zero disables this rarity.")]
         [Min(0)] public float Weight;
         [HideInInspector] public UpgradeBonuses BonusPercents;
+        [Tooltip("Rarity color used on rewards and inventory items.")]
         [HideInInspector] public Color Color = Color.gray;
         [SerializeField, HideInInspector] private float BonusPercent = 5;
         [SerializeField, HideInInspector] private bool m_StatBonusesInitialized;
@@ -40,6 +42,7 @@ namespace GameHolder.PureDots
         [Range(1, PlayerLoadout.Capacity)] public int MaxWeapons = 2;
         [Tooltip("Each slot independently rolls this chance. Full inventory or an exhausted weapon roster forces stat upgrades.")]
         [Range(0, 1)] public float NewWeaponChance = .5f;
+        [Tooltip("Base XP per level; the threshold grows with player level.")]
         [Min(1)] public int ExperiencePerLevel = (int)ProgressionConstants.ExpPerLevelMultiplier;
         [Tooltip("Enable to reproduce the same reward sequence on every run. Disabled uses a fresh seed on Play and varies it on Restart.")]
         public bool UseFixedSeed;
@@ -48,10 +51,13 @@ namespace GameHolder.PureDots
         [Tooltip("Starting weapon is included automatically. Owned assets are excluded. Empty entries and repeated assets are ignored.")]
         public CharacterWeaponDefinition[] Weapons = new CharacterWeaponDefinition[0];
         [Header("Upgrade Targets")]
+        [Tooltip("Relative weight for character upgrades. Zero excludes character upgrades.")]
         [Min(0)] public float CharacterTargetWeight = 1;
+        [Tooltip("Relative weight per owned weapon for weapon upgrades. Zero excludes weapon upgrades.")]
         [Min(0)] public float WeaponTargetWeight = 1;
         [Tooltip("Global filter, combined with Upgradable Stats on the selected character asset.")]
         [HideInInspector] public CharacterUpgradeStats CharacterStats = CharacterUpgradeStats.All;
+        [Tooltip("Global weapon upgrade filter, combined with each weapon's eligible stats and type.")]
         [HideInInspector] public WeaponUpgradeStats WeaponStats = WeaponUpgradeStats.All;
         [Tooltip("Shared upgrade and artifact rarities. Add, remove or reorder tiers here; artifact rarity choices update automatically.")]
         [HideInInspector] public RewardTierSettings[] Rarities = DefaultRarities();
@@ -134,6 +140,10 @@ namespace GameHolder.PureDots
             { error = "Add at least one rarity with a positive weight."; return false; }
             if (character == null || startingWeapon == null)
             { error = "Rewards require a character and starting weapon asset."; return false; }
+            if (!character.TryValidate(out error, startingWeapon)) return false;
+            if (Weapons != null)
+                foreach (var weapon in Weapons)
+                    if (weapon != null && !weapon.TryValidate(out error)) return false;
             var characterStats = CharacterStats & character.UpgradableStats & CharacterUpgradeStats.All;
             if (character.MagnetRadius <= 0) characterStats &= ~CharacterUpgradeStats.PickupRadius;
             int characterCount = CharacterTargetWeight > 0 ? math.countbits((uint)characterStats) : 0;

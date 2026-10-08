@@ -7,8 +7,9 @@ namespace GameHolder.PureDots
     {
         public static AudioThrottlingManager Instance { get; private set; }
 
-        [SerializeField] private AudioSource m_AudioSourcePrefab;
+        [Tooltip("AudioSource components created on startup for placeholder playback. Zero disables playback.")]
         [SerializeField] private int m_AudioSourcePoolSize = PresentationConstants.AudioSourcePoolSize;
+        [Tooltip("Maximum playback requests per clip per rendered frame; not a limit on all playing voices.")]
         [SerializeField] private int m_MaxConcurrentPerSound = PresentationConstants.MaxSoundsPerClipPerFrame;
 
         private readonly Dictionary<AudioClip, int> m_FrameCounts = new Dictionary<AudioClip, int>(PresentationConstants.SoundClipCount);

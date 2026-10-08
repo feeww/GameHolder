@@ -830,6 +830,7 @@ namespace GameHolder.PureDots.Tests
             var oldCharacter = settings.StartingCharacter;
             var oldWeaponAsset = settings.StartingWeaponAsset;
             var oldEnemies = (EnemyDefinition[])settings.EnemyTypes?.Clone();
+            string oldSpawning = JsonUtility.ToJson(settings.EnemySpawning);
             var character = ScriptableObject.CreateInstance<CharacterDefinition>();
             var enemy = ScriptableObject.CreateInstance<EnemyDefinition>();
             var characterWeapon = ScriptableObject.CreateInstance<CharacterWeaponDefinition>();
@@ -839,12 +840,23 @@ namespace GameHolder.PureDots.Tests
             World world = null;
             try
             {
+                var spawning = serialized.FindProperty("m_EnemySpawning");
+                spawning.FindPropertyRelative("SpawnInterval").floatValue = .25f;
+                spawning.FindPropertyRelative("BatchSize").intValue = 3;
+                spawning.FindPropertyRelative("SpawnRateScalingInterval").floatValue = 10;
+                spawning.FindPropertyRelative("SpawnRateMultiplier").floatValue = 1.5f;
+                spawning.FindPropertyRelative("StatScalingInterval").floatValue = 5;
+                spawning.FindPropertyRelative("HealthMultiplier").floatValue = 2;
+                spawning.FindPropertyRelative("EnableLargeSpawns").boolValue = true;
+                spawning.FindPropertyRelative("LargeSpawnInterval").floatValue = 1;
+                spawning.FindPropertyRelative("LargeSpawnCount").intValue = 4;
                 character.MaxHealth = 250; character.MoveSpeed = 8; character.InvulnerabilityDuration = .5f;
                 character.CollisionRadius = .65f; character.RespawnGracePeriod = 2.75f;
                 character.Texture = Texture2D.whiteTexture;
                 characterWeapon.Type = WeaponType.Laser; characterWeapon.Damage = 47; characterWeapon.AttackInterval = .9f;
                 character.Weapon = characterWeapon;
                 enemy.ContactAttackInterval = 1.7f; enemy.MaxHealth = 300; enemy.MoveSpeed = 0; enemy.Ranged = true;
+                enemy.AvailableAfterSeconds = .05f;
                 enemyWeapon.Type = enemyWeaponType; enemyWeapon.AttackRange = 64; enemyWeapon.AttackInterval = .05f;
                 enemyWeapon.Tint = new Color(.2f, .3f, .7f, .8f); enemyWeapon.ProjectileCount = 1; enemyWeapon.Damage = 9; enemy.Weapon = enemyWeapon;
                 enemy.AttackRange = 64;
@@ -856,6 +868,7 @@ namespace GameHolder.PureDots.Tests
                 roster.GetArrayElementAtIndex(1).objectReferenceValue = enemy;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 world = new World("Scene authoring integration"); var em = world.EntityManager;
+                world.GetOrCreateSystemManaged<GameConfigurationBootstrapSystem>().Update();
                 world.GetOrCreateSystemManaged<PureDotsRenderBootstrapSystem>().Update();
                 world.GetOrCreateSystem<SimulationBootstrapSystem>().Update(world.Unmanaged);
                 var runEntity = em.CreateEntityQuery(typeof(SimulationRunState)).GetSingletonEntity();
@@ -866,6 +879,7 @@ namespace GameHolder.PureDots.Tests
                 var catalog = em.CreateEntityQuery(typeof(EnemyConfigCatalogSingleton)).GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
                 Assert.That(catalog.Value.Configs.Length, Is.EqualTo(1));
                 Assert.That(catalog.Value.Configs[0].ContactAttackInterval, Is.EqualTo(1.7f));
+                Assert.That(catalog.Value.Configs[0].AvailableAfterSeconds, Is.EqualTo(.05f));
                 Assert.That(em.GetComponentData<SimulationRunState>(runEntity).PlayerCollisionRadius, Is.EqualTo(.65f));
                 var commands = em.CreateEntityQuery(typeof(SimulationCommandQueue)).GetSingleton<SimulationCommandQueue>().Commands;
                 commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.AutoAttack, Value = 0 });
@@ -898,11 +912,19 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(em.GetComponentData<PlayerInvulnerability>(player).InvulnerabilityDuration, Is.EqualTo(.5f));
                 Assert.That(em.GetComponentData<PlayerInvulnerability>(player).Timer, Is.EqualTo(2.74f).Within(.0001f));
                 Assert.That(em.GetComponentData<PlayerStats>(player).CollisionRadius, Is.EqualTo(.65f));
+                var wave = em.CreateEntityQuery(typeof(WaveSpawnerConfig)).GetSingleton<WaveSpawnerConfig>();
+                Assert.That(wave.SpawnInterval, Is.EqualTo(.25f)); Assert.That(wave.BatchSize, Is.EqualTo(3));
+                Assert.That(wave.SpawnRateScalingInterval, Is.EqualTo(10)); Assert.That(wave.SpawnRateMultiplier, Is.EqualTo(1.5f));
+                Assert.That(wave.StatScalingInterval, Is.EqualTo(5)); Assert.That(wave.StatMultipliers.x, Is.EqualTo(2));
+                Assert.That(wave.LargeSpawnInterval, Is.EqualTo(1)); Assert.That(wave.LargeSpawnCount, Is.EqualTo(4));
+                Assert.That(wave.ElapsedSeconds, Is.EqualTo(.01f).Within(.0001));
+                Assert.That(wave.LargeSpawnTimer, Is.EqualTo(.01f).Within(.0001));
                 world.Dispose(); world = null;
                 overrideWeapon.Type = WeaponType.Explosive; overrideWeapon.Damage = 123;
                 serialized.Update(); serialized.FindProperty("m_StartingWeaponAsset").objectReferenceValue = overrideWeapon;
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 world = new World("Weapon override integration");
+                world.GetOrCreateSystemManaged<GameConfigurationBootstrapSystem>().Update();
                 world.GetOrCreateSystemManaged<PureDotsRenderBootstrapSystem>().Update();
                 world.GetOrCreateSystem<SimulationBootstrapSystem>().Update(world.Unmanaged);
                 var startingPlayer = world.EntityManager.CreateEntityQuery(typeof(StartingPlayerConfig)).GetSingleton<StartingPlayerConfig>();
@@ -912,6 +934,7 @@ namespace GameHolder.PureDots.Tests
             finally
             {
                 world?.Dispose();
+                JsonUtility.FromJsonOverwrite(oldSpawning, settings.EnemySpawning);
                 serialized.Update(); serialized.FindProperty("m_StartingCharacter").objectReferenceValue = oldCharacter;
                 serialized.FindProperty("m_StartingWeaponAsset").objectReferenceValue = oldWeaponAsset;
                 var roster = serialized.FindProperty("m_EnemyTypes"); roster.arraySize = oldEnemies?.Length ?? 0;
@@ -1153,8 +1176,12 @@ namespace GameHolder.PureDots.Tests
                 UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/SampleScene.unity");
                 world = new World("Render ownership regression");
                 var em = world.EntityManager;
-                world.GetOrCreateSystemManaged<PureDotsRenderBootstrapSystem>().Update();
-                world.GetOrCreateSystem<SimulationBootstrapSystem>().Update(world.Unmanaged);
+                var initialization = world.GetOrCreateSystemManaged<InitializationSystemGroup>();
+                initialization.AddSystemToUpdateList(world.GetOrCreateSystem<SimulationBootstrapSystem>());
+                initialization.AddSystemToUpdateList(world.GetOrCreateSystemManaged<PureDotsRenderBootstrapSystem>());
+                initialization.AddSystemToUpdateList(world.GetOrCreateSystemManaged<GameConfigurationBootstrapSystem>());
+                initialization.SortSystems();
+                initialization.Update();
                 var prefabs = em.CreateEntityQuery(typeof(PureDotsPrefabsSingleton)).GetSingleton<PureDotsPrefabsSingleton>();
                 var render = em.GetSharedComponent<RenderMeshArray>(prefabs.PlayerPrefab);
                 var indices = em.GetComponentData<MaterialMeshInfo>(prefabs.PlayerPrefab);

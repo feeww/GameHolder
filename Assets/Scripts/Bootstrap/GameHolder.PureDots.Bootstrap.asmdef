@@ -3,9 +3,7 @@
   "rootNamespace": "GameHolder.PureDots",
   "references": [
     "GameHolder.PureDots",
-    "GameHolder.PureDots.Presentation",
     "Unity.Entities",
-    "Unity.Entities.Graphics",
     "Unity.Mathematics",
     "Unity.Collections",
     "Unity.Burst",

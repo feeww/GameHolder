@@ -16,7 +16,7 @@ namespace GameHolder.PureDots.Editor
             if (!mixed && type.intValue != (int)WeaponType.Laser)
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("ProjectileSpeed"));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("ProjectileLifetime"),
-                new GUIContent(type.intValue == (int)WeaponType.Laser ? "Beam Duration" : "Projectile Lifetime"));
+                new GUIContent(type.intValue == (int)WeaponType.Laser ? "Beam Duration" : "Projectile Lifetime", serializedObject.FindProperty("ProjectileLifetime").tooltip));
             if (!mixed && type.intValue == (int)WeaponType.Explosive)
                 EditorGUILayout.PropertyField(serializedObject.FindProperty("BlastRadius"));
             if (!mixed && type.intValue == (int)WeaponType.Standard)
@@ -31,7 +31,10 @@ namespace GameHolder.PureDots.Editor
             if (stats != null)
             {
                 serializedObject.Update();
-                var bootstrap = Object.FindAnyObjectByType<GamePresentationBootstrap>();
+                var bootstrap = (GamePresentationBootstrap)EditorGUILayout.ObjectField(
+                    new GUIContent("Scene Settings", "Scene whose shared weapon upgrade filter applies. Without a selected scene, all applicable stats are shown."),
+                    RaritySettingsWindow.Context, typeof(GamePresentationBootstrap), true);
+                RaritySettingsWindow.Context = bootstrap;
                 var available = bootstrap?.Rewards?.WeaponStats ?? WeaponUpgradeStats.All;
                 foreach (var selected in targets)
                     available &= ((CharacterWeaponDefinition)selected).GetApplicableUpgradeStats();
@@ -46,7 +49,8 @@ namespace GameHolder.PureDots.Editor
                         mixedStat |= ((((CharacterWeaponDefinition)selected).UpgradableStats & (WeaponUpgradeStats)bit) != 0) != enabled;
                     EditorGUI.showMixedValue = mixedStat;
                     EditorGUI.BeginChangeCheck();
-                    bool next = EditorGUILayout.Toggle(RaritySettingsWindow.StatNames[i + 2], enabled);
+                    bool next = EditorGUILayout.Toggle(new GUIContent(RaritySettingsWindow.StatNames[i + 2],
+                        "Allow this weapon to receive this upgrade. " + RaritySettingsWindow.StatDescriptions[i + 2]), enabled);
                     if (EditorGUI.EndChangeCheck())
                         foreach (var selected in targets)
                         {
@@ -58,8 +62,10 @@ namespace GameHolder.PureDots.Editor
                     EditorGUI.showMixedValue = false;
                 }
                 if (available == WeaponUpgradeStats.None) EditorGUILayout.HelpBox("No applicable upgrades are enabled for this weapon in Weapon Upgrades.", MessageType.Info);
-                if (GUILayout.Button("Shared Weapon Upgrade Percentages")) RaritySettingsWindow.OpenWeaponUpgrades();
+                if (GUILayout.Button(new GUIContent("Shared Weapon Upgrade Percentages", RaritySettingsWindow.Pages[2].tooltip)))
+                    RaritySettingsWindow.OpenPage(2, bootstrap);
             }
+            if (!((WeaponDefinition)target).TryValidate(out string error)) EditorGUILayout.HelpBox(error, MessageType.Error);
         }
     }
 }

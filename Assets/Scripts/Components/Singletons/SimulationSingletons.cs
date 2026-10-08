@@ -102,6 +102,12 @@ namespace GameHolder.PureDots
         public float MinRadius;
         public float MaxRadius;
         public uint RandomSeed;
+        public double ElapsedSeconds;
+        public float SpawnRateScalingInterval, SpawnRateMultiplier;
+        public float StatScalingInterval;
+        public float3 StatMultipliers;
+        public float LargeSpawnInterval, LargeSpawnTimer;
+        public int LargeSpawnCount;
     }
 
     public struct PureDotsPrefabsSingleton : IComponentData

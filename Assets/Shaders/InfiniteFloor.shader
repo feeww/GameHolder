@@ -4,7 +4,7 @@ Shader "PureDots/InfiniteFloor"
     {
         _MainTex ("Floor Texture", 2D) = "gray" {}
         _TileScale ("Tile World Scale", Float) = 2.0
-        _OriginTileOffset ("Origin Tile Offset", Vector) = (0,0,0,0)
+        [HideInInspector] _OriginTileOffset ("Origin Tile Offset", Vector) = (0,0,0,0)
         _FloorColor ("Floor Tint", Color) = (0.2, 0.22, 0.25, 1.0)
         _GridColor ("Grid Line Tint", Color) = (0.3, 0.33, 0.38, 1.0)
     }
@@ -83,4 +83,5 @@ Shader "PureDots/InfiniteFloor"
             ENDHLSL
         }
     }
+    CustomEditor "GameHolder.PureDots.Editor.PureDotsShaderGUI"
 }

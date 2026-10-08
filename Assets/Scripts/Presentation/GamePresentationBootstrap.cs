@@ -6,24 +6,37 @@ namespace GameHolder.PureDots
     {
         public static GamePresentationBootstrap Instance { get; private set; }
         [Header("Starting Character & Weapon (applied on Play)")]
+        [Tooltip("Required starting character stats and artwork; applied on Play.")]
         [SerializeField] private CharacterDefinition m_StartingCharacter;
         [Tooltip("Overrides the character asset's weapon. Empty uses the character asset's weapon.")]
         [SerializeField] private CharacterWeaponDefinition m_StartingWeaponAsset;
         [Header("Enemy Roster (assign at least one asset)")]
+        [Tooltip("Spawn roster; null entries are ignored. Assign at least one enemy.")]
         [SerializeField] private EnemyDefinition[] m_EnemyTypes = new EnemyDefinition[0];
 
         public CharacterDefinition StartingCharacter => m_StartingCharacter;
         public CharacterWeaponDefinition StartingWeaponAsset => m_StartingWeaponAsset;
         public EnemyDefinition[] EnemyTypes => m_EnemyTypes;
 
+        [Header("Enemy Spawning (applied on Play)")]
+        [Tooltip("Enemy batches and difficulty scaling; applied on Play.")]
+        [SerializeField] private EnemySpawnSettings m_EnemySpawning = new EnemySpawnSettings();
+        public EnemySpawnSettings EnemySpawning => m_EnemySpawning;
+
         [Header("Elite Enemies (applied on Play)")]
         [Tooltip("Chance per spawn: 0.01 = 1%. Zero disables elites and preserves the wave RNG sequence.")]
         [Range(0, 1)] [SerializeField] private float m_EliteSpawnProbability;
+        [Tooltip("Elite maximum-health multiplier, before run-time scaling.")]
         [Min(.01f)] [SerializeField] private float m_EliteHealthMultiplier = 2;
+        [Tooltip("Elite movement-speed multiplier, before run-time scaling.")]
         [Min(.01f)] [SerializeField] private float m_EliteSpeedMultiplier = 1.25f;
+        [Tooltip("Elite collision-radius and artwork-size multiplier.")]
         [Min(.01f)] [SerializeField] private float m_EliteSizeMultiplier = 1.25f;
+        [Tooltip("Elite crowd-push mass multiplier.")]
         [Min(.01f)] [SerializeField] private float m_EliteMassMultiplier = 2;
+        [Tooltip("Elite contact and ranged damage multiplier, before run-time scaling.")]
         [Min(.01f)] [SerializeField] private float m_EliteDamageMultiplier = 2;
+        [Tooltip("Elite XP multiplier, rounded to whole points. Zero gives no XP.")]
         [Min(0)] [SerializeField] private float m_EliteExperienceMultiplier = 2;
         [Tooltip("Multiplies each enemy asset's chest drop chance, capped at 100%. Zero disables elite chest drops.")]
         [Min(0)] [SerializeField] private float m_EliteChestDropChanceMultiplier = 2;
@@ -37,21 +50,27 @@ namespace GameHolder.PureDots
         };
 
         [Header("Level-up Rewards")]
+        [Tooltip("Level-up choices, weapon roster and shared rarity rules; applied on Play.")]
         [SerializeField] private RewardSettings m_Rewards = new RewardSettings();
         public RewardSettings Rewards => m_Rewards;
 
         [Header("Temporary Stat Zones (applied on Play)")]
+        [Tooltip("Capture-zone rules, rewards and artwork; simulation rules apply on Play.")]
         [SerializeField] private TemporaryZoneSettings m_TemporaryZones = new TemporaryZoneSettings();
         public TemporaryZoneSettings TemporaryZones => m_TemporaryZones;
         public Camera GameCamera => m_Camera;
         private TemporaryZonePresentation m_ZonePresentation;
 
         [Header("Artifact Chests (choose one artifact per chest)")]
+        [Tooltip("Chest reward roster; null and duplicate entries are ignored.")]
         [SerializeField] private ArtifactDefinition[] m_Artifacts = new ArtifactDefinition[0];
+        [Tooltip("Chest artwork, choices and blocking allowance; applied on Play.")]
         [SerializeField] private ArtifactChestSettings m_ArtifactChests = new ArtifactChestSettings();
         public ArtifactChestSettings ArtifactChests => m_ArtifactChests;
         private void OnValidate() => m_Rewards?.EnsureRarityIds();
+        [Tooltip("Inventory button artwork. Empty hides the icon; the Inventory button remains available.")]
         [SerializeField] private Texture2D m_InventoryTexture;
+        [Tooltip("Normalized inventory-icon crop; x/y are the lower-left corner.")]
         [SerializeField] private Rect m_InventoryUV = new Rect(0, 0, 1, 1);
         public Texture2D InventoryTexture => m_InventoryTexture;
         public Rect InventoryUV => m_InventoryUV;
@@ -64,12 +83,17 @@ namespace GameHolder.PureDots
         }
 
         [Header("Rendering & Camera")]
+        [Tooltip("Gameplay camera. Empty uses Main Camera or creates one. Startup applies orthographic camera defaults.")]
         [SerializeField] private Camera m_Camera;
+        [Tooltip("Infinite floor material. Empty uses the default. A runtime copy preserves the source asset.")]
         [SerializeField] private Material m_FloorMaterial;
 
         [Header("Audio & VFX")]
+        [Tooltip("Enemy death sound. Empty uses the generated placeholder until audio is configured.")]
         [SerializeField] private AudioClip m_EnemyDeathClip;
+        [Tooltip("Gem collection sound. Empty uses the generated placeholder until audio is configured.")]
         [SerializeField] private AudioClip m_GemCollectClip;
+        [Tooltip("Player hit and death sound. Empty uses the generated placeholder until audio is configured.")]
         [SerializeField] private AudioClip m_PlayerHitClip;
 
         public static AudioClip EnemyDeathClip { get; private set; }
@@ -155,6 +179,8 @@ namespace GameHolder.PureDots
 
         public bool TryValidateConfiguration(out string error)
         {
+            if (m_EnemySpawning == null) { error = "Configure Enemy Spawning."; return false; }
+            if (!m_EnemySpawning.TryValidate(out error)) return false;
             var elites = Elites;
             if (!Unity.Mathematics.math.isfinite(elites.SpawnProbability) || elites.SpawnProbability < 0 || elites.SpawnProbability > 1)
             { error = "Elite spawn probability must be finite and between 0 and 1."; return false; }
@@ -170,14 +196,18 @@ namespace GameHolder.PureDots
             if (m_StartingCharacter == null) { error = "Assign a Starting Character asset."; return false; }
             if (m_StartingWeaponAsset == null && m_StartingCharacter.Weapon == null)
             { error = "Assign a character weapon to the Starting Character or Starting Weapon Asset field."; return false; }
+            if (!m_StartingCharacter.TryValidate(out error, m_StartingWeaponAsset)) return false;
             bool hasEnemy = false;
             if (m_EnemyTypes != null)
                 foreach (var enemy in m_EnemyTypes)
                 {
                     if (enemy == null) continue;
                     hasEnemy = true;
+                    if (!Unity.Mathematics.math.isfinite(enemy.AvailableAfterSeconds) || enemy.AvailableAfterSeconds < 0)
+                    { error = $"Enemy '{enemy.name}' appearance time must be finite and nonnegative."; return false; }
                     if (!Unity.Mathematics.math.isfinite(enemy.ChestDropChance) || enemy.ChestDropChance < 0 || enemy.ChestDropChance > 1)
                     { error = $"Enemy '{enemy.name}' chest drop chance must be between 0 and 1."; return false; }
+                    if (!enemy.TryValidate(out error)) return false;
                     if (enemy.Ranged && enemy.Weapon == null)
                     { error = $"Ranged enemy '{enemy.name}' requires an enemy weapon asset."; return false; }
                     var config = enemy.ToConfig(0, m_StartingCharacter.CollisionRadius);

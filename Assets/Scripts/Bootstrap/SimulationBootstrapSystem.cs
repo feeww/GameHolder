@@ -10,7 +10,6 @@ namespace GameHolder.PureDots
 {
     [BurstCompile]
     [UpdateInGroup(typeof(InitializationSystemGroup))]
-    [UpdateAfter(typeof(PureDotsRenderBootstrapSystem))]
     public partial struct SimulationBootstrapSystem : ISystem
     {
         private bool m_Initialized;
@@ -25,8 +24,10 @@ namespace GameHolder.PureDots
         public void OnUpdate(ref SystemState state)
         {
             if (m_Initialized) return;
-            if (!SystemAPI.HasSingleton<PureDotsPrefabsSingleton>() || !SystemAPI.HasSingleton<StartingPlayerConfig>() ||
+            if (!SystemAPI.HasSingleton<StartingPlayerConfig>() ||
                 !SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>() || !SystemAPI.HasSingleton<RewardCatalogSingleton>()) return;
+            if (!SystemAPI.HasSingleton<PureDotsPrefabsSingleton>())
+                state.EntityManager.AddComponentData(state.EntityManager.CreateEntity(), CreatePrefabs(state.EntityManager, SystemAPI.GetSingleton<StartingPlayerConfig>()));
             m_Initialized = true;
 
             var prefabs = SystemAPI.GetSingleton<PureDotsPrefabsSingleton>();
@@ -40,8 +41,8 @@ namespace GameHolder.PureDots
             });
 
             // 3. Wave spawner config singleton
-            var spawnerEntity = em.CreateEntity();
-            em.AddComponentData(spawnerEntity, RunDefaults.Wave);
+            if (!SystemAPI.HasSingleton<WaveSpawnerConfig>())
+                em.AddComponentData(em.CreateEntity(), RunDefaults.Wave);
 
             // 5. Spatial Hash Grids (2x over-provisioning for load factor <= 0.5)
             const int maxEnemies = EnemyPoolSingleton.Capacity;
@@ -223,6 +224,62 @@ namespace GameHolder.PureDots
             em.AddComponentData(runEntity, new SimulationJobFence());
             em.AddComponentData(em.CreateEntity(), new SimulationInput());
             em.AddComponentData(em.CreateEntity(), new SimulationCommandQueue { Commands = new UnsafeQueue<SimulationCommand>(Allocator.Persistent) });
+        }
+
+        public static PureDotsPrefabsSingleton CreatePrefabs(EntityManager em, StartingPlayerConfig startingPlayer)
+        {
+            var player = em.CreateEntity();
+            em.AddComponent<Prefab>(player);
+            em.AddComponentData(player, LocalTransform.Identity);
+            em.AddComponent<PlayerTag>(player);
+            em.AddComponent<MovementVelocity>(player);
+            em.AddComponent<PreviousPosition>(player);
+            em.AddComponent<PlayerInputData>(player);
+            em.AddComponentData(player, new PlayerInvulnerability { InvulnerabilityDuration = startingPlayer.InvulnerabilityDuration });
+            em.AddComponentData(player, startingPlayer.Stats);
+            em.AddComponentData(player, startingPlayer.Weapon);
+
+            var enemy = em.CreateEntity();
+            em.AddComponent<Prefab>(enemy);
+            em.AddComponentData(enemy, LocalTransform.Identity);
+            em.AddComponent<MovementVelocity>(enemy);
+            em.AddComponent<PreviousPosition>(enemy);
+            em.AddComponent<SeparationCache>(enemy);
+            em.AddComponent<CurrentHealth>(enemy);
+            em.AddComponent<TypeId>(enemy);
+            em.AddComponent<EnemyRangedCooldown>(enemy);
+            em.AddComponent<EnemyMeleeCooldown>(enemy);
+            em.AddComponent<EnemyActiveTag>(enemy);
+            em.AddComponent<EnemyRangedTag>(enemy);
+
+            var playerProjectile = CreateProjectilePrefab(em);
+            em.AddComponent<PlayerProjectileTag>(playerProjectile);
+            var enemyProjectile = CreateProjectilePrefab(em);
+            em.AddComponent<EnemyProjectileTag>(enemyProjectile);
+
+            var gem = em.CreateEntity();
+            em.AddComponent<Prefab>(gem);
+            em.AddComponentData(gem, LocalTransform.Identity);
+            em.AddComponent<GemData>(gem);
+            em.AddComponent<GemActiveTag>(gem);
+            return new PureDotsPrefabsSingleton { PlayerPrefab = player, EnemyPrefab = enemy,
+                PlayerProjPrefab = playerProjectile, EnemyProjPrefab = enemyProjectile, GemPrefab = gem };
+        }
+
+        private static Entity CreateProjectilePrefab(EntityManager em)
+        {
+            var projectile = em.CreateEntity();
+            em.AddComponent<Prefab>(projectile);
+            em.AddComponentData(projectile, LocalTransform.Identity);
+            em.AddComponent<MovementVelocity>(projectile);
+            em.AddComponent<PreviousPosition>(projectile);
+            em.AddComponent<ProjectileData>(projectile);
+            em.AddComponent<ProjectileActiveTag>(projectile);
+            em.AddComponent<ExplosiveProjectile>(projectile);
+            em.AddComponent<LaserBeam>(projectile);
+            em.SetComponentEnabled<ExplosiveProjectile>(projectile, false);
+            em.SetComponentEnabled<LaserBeam>(projectile, false);
+            return projectile;
         }
 
         [BurstCompile]

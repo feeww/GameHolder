@@ -16,16 +16,40 @@ namespace GameHolder.PureDots
             if (run.Paused) return;
             if (A.Stats[run.Player].IsDead != 0) return;
             var wave = A.Waves[A.Wave];
+            wave.ElapsedSeconds += Dt;
             wave.Timer += Dt;
             int count = run.ExtraSpawns;
             run.ExtraSpawns = 0;
             if (wave.SpawnInterval > 0 && wave.Timer >= wave.SpawnInterval)
             {
-                int batches = (int)math.floor(wave.Timer / wave.SpawnInterval);
-                wave.Timer -= batches * wave.SpawnInterval;
-                count = math.min(SimulationConstants.MaxEnemies, count + math.min(batches, SimulationConstants.MaxEnemies) * wave.BatchSize);
+                int batches = (int)math.min(SimulationConstants.MaxEnemies, math.floor((double)wave.Timer / wave.SpawnInterval));
+                wave.Timer %= wave.SpawnInterval;
+                float scale = wave.SpawnRateScalingInterval > 0
+                    ? math.pow(math.max(1, wave.SpawnRateMultiplier), (float)math.floor(wave.ElapsedSeconds / wave.SpawnRateScalingInterval)) : 1;
+                int batchSize = (int)math.min(SimulationConstants.MaxEnemies, math.ceil((double)wave.BatchSize * scale));
+                count = math.min(SimulationConstants.MaxEnemies, count + batches * batchSize);
+            }
+            if (wave.LargeSpawnInterval > 0)
+            {
+                wave.LargeSpawnTimer += Dt;
+                int batches = (int)math.min(SimulationConstants.MaxEnemies, math.floor((double)wave.LargeSpawnTimer / wave.LargeSpawnInterval));
+                wave.LargeSpawnTimer %= wave.LargeSpawnInterval;
+                count = math.min(SimulationConstants.MaxEnemies, count + batches * wave.LargeSpawnCount);
             }
             if (count <= 0) { A.Waves[A.Wave] = wave; A.Run[A.State] = run; return; }
+            ref var configs = ref A.Catalog.Value.Configs;
+            float totalWeight = 0;
+            int eligibleTypes = 0;
+            for (int i = 0; i < configs.Length; i++)
+                if (wave.ElapsedSeconds >= configs[i].AvailableAfterSeconds)
+                {
+                    totalWeight += configs[i].SpawnThreshold - (i > 0 ? configs[i - 1].SpawnThreshold : 0);
+                    eligibleTypes++;
+                }
+            if (eligibleTypes == 0) { A.Waves[A.Wave] = wave; A.Run[A.State] = run; return; }
+            if (eligibleTypes == configs.Length) totalWeight = configs[configs.Length - 1].SpawnThreshold;
+            float3 statScale = wave.StatScalingInterval > 0
+                ? math.min(float.MaxValue, math.pow(math.max(1, wave.StatMultipliers), (float)math.floor(wave.ElapsedSeconds / wave.StatScalingInterval))) : new float3(1);
             var random = new Random(math.max(1u, wave.RandomSeed));
             bool moving = math.lengthsq(run.PlayerVelocity) >= RunDefaults.MovingSpawnVelocitySq;
             float baseAngle = math.atan2(run.PlayerVelocity.y, run.PlayerVelocity.x);
@@ -43,15 +67,25 @@ namespace GameHolder.PureDots
                 }
                 float distance = math.sqrt(random.NextFloat(minRadius * minRadius, maxRadius * maxRadius));
                 float2 position = run.PlayerPosition + new float2(math.cos(angle), math.sin(angle)) * distance;
-                ref var configs = ref A.Catalog.Value.Configs;
-                float choice = random.NextFloat(0, configs[configs.Length - 1].SpawnThreshold);
+                float choice = random.NextFloat(0, totalWeight);
                 int low = 0, high = configs.Length - 1;
-                while (low < high)
+                if (eligibleTypes == configs.Length)
                 {
-                    int middle = (low + high) / 2;
-                    if (choice < configs[middle].SpawnThreshold) high = middle; else low = middle + 1;
+                    while (low < high)
+                    {
+                        int middle = (low + high) / 2;
+                        if (choice < configs[middle].SpawnThreshold) high = middle; else low = middle + 1;
+                    }
                 }
-                var type = new TypeId { Value = (uint)low };
+                else
+                    for (int j = 0; j < configs.Length; j++)
+                    {
+                        if (wave.ElapsedSeconds < configs[j].AvailableAfterSeconds) continue;
+                        low = j;
+                        choice -= configs[j].SpawnThreshold - (j > 0 ? configs[j - 1].SpawnThreshold : 0);
+                        if (choice < 0) break;
+                    }
+                var type = new TypeId { Value = (uint)low, StatMultipliers = statScale };
                 if (A.Catalog.Value.Elites.SpawnProbability > 0)
                     type.IsElite = (byte)(random.NextFloat() < A.Catalog.Value.Elites.SpawnProbability ? 1 : 0);
                 var config = A.Catalog.Value.GetConfig(type);
