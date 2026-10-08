@@ -396,8 +396,17 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 23188b466d3743dcba02b9aa8bbfbb7b, type: 2}
   - {fileID: 11400000, guid: 77b4a281c9464fc58ef1dbf88be402f3, type: 2}
   - {fileID: 11400000, guid: 7e45f64d791a4da2a5d2e3e92f0cb14f, type: 2}
+  m_EliteSpawnProbability: 0.25
+  m_EliteHealthMultiplier: 2
+  m_EliteSpeedMultiplier: 1.25
+  m_EliteSizeMultiplier: 1.3
+  m_EliteMassMultiplier: 1.5
+  m_EliteDamageMultiplier: 2
+  m_EliteExperienceMultiplier: 2
+  m_EliteChestDropChanceMultiplier: 2
   m_Rewards:
     ChoicesPerLevel: 4
+    MaxRerollsPerRun: 5
     MaxWeapons: 2
     NewWeaponChance: 0.1
     ExperiencePerLevel: 50
@@ -536,12 +545,46 @@ MonoBehaviour:
       Color: {r: 0, g: 0, b: 0, a: 0}
       BonusPercent: 0
       m_StatBonusesInitialized: 0
+  m_TemporaryZones:
+    Enabled: 1
+    SpawnChance: 0.1
+    SpawnInterval: 10
+    MaxActiveZones: 1
+    Lifetime: 60
+    HoldDuration: 5
+    Radius: 3
+    MinEdgeDistance: 2
+    MaxEdgeDistance: 8
+    ViewPadding: 1
+    CharacterStats: 3
+    WeaponStats: 63
+    BonusMultiplier: 1
+    StructureTexture: {fileID: 2800000, guid: 9bef54652624d0549aa89e5e80c47c4d, type: 3}
+    StructureUV:
+      serializedVersion: 2
+      x: 0
+      y: 0
+      width: 1
+      height: 1
+    StructureSize: {x: 4, y: 4}
+    StructureTint: {r: 1, g: 1, b: 1, a: 1}
+    ZoneColor: {r: 0.25, g: 0.8, b: 1, a: 1}
+    RingWidth: 0.08
+    ShowOffscreenArrow: 1
+    ArrowTexture: {fileID: 2800000, guid: 746260951365e8945a9e8144255bd0cd, type: 3}
+    ArrowColor: {r: 1, g: 1, b: 1, a: 1}
+    IndicatorMargin: 90
+    ArrowSize: 30
+    ZoneName: TEMPORARY ZONE
+    RewardTitle: ZONE REWARD RECEIVED
   m_Artifacts:
   - {fileID: 11400000, guid: 7ee055bfcb3210a4ab202aac4331daf2, type: 2}
   - {fileID: 11400000, guid: 0ba02c6cd7556f9479cfec2a7bd31b31, type: 2}
   - {fileID: 11400000, guid: 52f3c67a8f8f14844a99b9644e767ebb, type: 2}
   m_ArtifactChests:
+    Texture: {fileID: 2800000, guid: 91c65a94279ca8747bcfff6289ffd2fb, type: 3}
     ChoicesPerChest: 2
+    MaxBlocksPerRun: 2
   m_InventoryTexture: {fileID: 2800000, guid: fe481f7c7665c2546b161af0df73858b, type: 3}
   m_InventoryUV:
     serializedVersion: 2

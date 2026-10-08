@@ -46,6 +46,8 @@ namespace GameHolder.PureDots
                         ArtifactRoll.Block(ref run, A.Stats[run.Player], ref A.Rewards.Value, command); break;
                     case SimulationCommandKind.RerollUpgrades:
                         RewardRoll.Reroll(ref run, A.Stats[run.Player], ref A.Rewards.Value, command); break;
+                    case SimulationCommandKind.AcknowledgeZoneReward:
+                        TemporaryZone.Acknowledge(ref run, command); break;
                 }
             }
             if (run.Paused)
@@ -88,6 +90,10 @@ namespace GameHolder.PureDots
                 run.PreviousPlayerPosition -= run.RebaseDelta;
                 run.PlayerPosition = float2.zero;
                 run.ForceRebase = 0;
+                for (int i = 0; i < run.Zone.Active.Length; i++)
+                {
+                    var zone = run.Zone.Active[i]; zone.Position -= run.RebaseDelta; run.Zone.Active[i] = zone;
+                }
                 ShiftPools(run.RebaseDelta);
             }
             A.Transforms[run.Player] = LocalTransform.FromPosition(new float3(run.PlayerPosition, 0));
@@ -131,6 +137,7 @@ namespace GameHolder.PureDots
             run = new SimulationRunState { Player = player, Generation = generation, GodMode = godMode, AutoAttack = autoAttack,
                 Loadout = RewardRoll.StartingLoadout(), Rewards = new RewardSelection { RandomState = RewardRoll.SeedForRun(ref A.Rewards.Value, generation) },
                 ArtifactRandomState = ArtifactRoll.SeedForRun(ref A.Rewards.Value, generation),
+                Zone = new TemporaryZoneState { RandomState = TemporaryZone.SeedForRun(ref A.Rewards.Value, generation) },
                 PlayerCollisionRadius = A.StartingPlayer.Stats.CollisionRadius };
             A.Stats[player] = A.StartingPlayer.Stats;
             A.Weapons[player] = A.StartingPlayer.Weapon;

@@ -45,9 +45,10 @@ namespace GameHolder.PureDots
             var projMat = PureDotsAssetFactory.CreateSpriteMaterial(projTex);
             var beamMat = PureDotsAssetFactory.CreateSpriteMaterial(Texture2D.whiteTexture);
             var gemMat = PureDotsAssetFactory.CreateSpriteMaterial(gemAtlasTex);
-            var chestTex = PureDotsAssetFactory.GenerateChestTexture();
+            var chestTex = settings.ArtifactChests.Texture != null ? settings.ArtifactChests.Texture : PureDotsAssetFactory.GenerateChestTexture();
             var chestMat = PureDotsAssetFactory.CreateSpriteMaterial(chestTex);
-            var owned = new List<UnityEngine.Object> { quadMesh, projTex, gemAtlasTex, playerMat, projMat, beamMat, gemMat, chestTex, chestMat };
+            var owned = new List<UnityEngine.Object> { quadMesh, projTex, gemAtlasTex, playerMat, projMat, beamMat, gemMat, chestMat };
+            if (settings.ArtifactChests.Texture == null) owned.Add(chestTex);
             // Indices 0 and 1 retain the default projectile and beam appearances.
             var projectileMaterials = new List<Material> { projMat, beamMat };
             var textureIndices = new Dictionary<Texture2D, int>();
@@ -64,6 +65,7 @@ namespace GameHolder.PureDots
             var startingWeapon = settings.StartingWeaponAsset != null ? settings.StartingWeaponAsset : character.Weapon;
             startingPlayer.Weapon = startingWeapon.ToConfig(MaterialIndex(startingWeapon));
             em.AddComponentData(em.CreateEntity(), startingPlayer);
+            em.AddComponentData(em.CreateEntity(), settings.TemporaryZones.ToConfig());
             em.AddComponentData(em.CreateEntity(), new RewardCatalogSingleton
             { Catalog = settings.Rewards.BuildCatalog(character, startingWeapon, MaterialIndex, settings.GetArtifacts(), settings.ArtifactChests) });
             if (PureDotsHUD.Instance != null)

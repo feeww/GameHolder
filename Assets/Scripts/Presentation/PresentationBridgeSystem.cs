@@ -80,6 +80,7 @@ namespace GameHolder.PureDots
                 if (audio != null) audio.PlaySoundThrottled(GamePresentationBootstrap.GemCollectClip, PresentationConstants.GemCollectVolume);
             }
             if (camera != null) camera.UpdateCameraPosition(snapshot.PlayerPosition, SystemAPI.Time.DeltaTime);
+            if (bootstrap != null) bootstrap.ApplyZoneSnapshot(snapshot);
             if (PureDotsHUD.Instance != null)
                 PureDotsHUD.Instance.ApplySnapshot(snapshot, SystemAPI.GetSingleton<SimulationCommandQueue>().Commands);
         }

@@ -15,7 +15,7 @@ MonoBehaviour:
   MaxHealth: 10000
   MoveSpeed: 8
   CollisionRadius: 0.4
-  MagnetRadius: 25.3
+  MagnetRadius: 21.9
   InvulnerabilityDuration: 0
   RespawnGracePeriod: 1.5
   Weapon: {fileID: 11400000, guid: 829b464ec0ad634469064ca1ddb370df, type: 2}

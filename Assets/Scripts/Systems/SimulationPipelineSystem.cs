@@ -51,6 +51,7 @@ namespace GameHolder.PureDots
         public BlobAssetReference<EnemyConfigCatalog> Catalog;
         public StartingPlayerConfig StartingPlayer;
         public BlobAssetReference<RewardCatalog> Rewards;
+        public TemporaryZoneConfig Zones;
 
         public void Initialize(ref SystemState state)
         {
@@ -158,6 +159,7 @@ namespace GameHolder.PureDots
                 m_Access.Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
                 m_Access.StartingPlayer = SystemAPI.GetSingleton<StartingPlayerConfig>();
                 m_Access.Rewards = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog;
+                m_Access.Zones = SystemAPI.HasSingleton<TemporaryZoneConfig>() ? SystemAPI.GetSingleton<TemporaryZoneConfig>() : default;
                 m_Bound = true;
             }
             m_Access.Update(ref state);
@@ -192,6 +194,7 @@ namespace GameHolder.PureDots
             chain = new LaserCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new DamageResolutionJob { A = m_Access, Damage = m_Damage, Deactivations = m_Deactivations, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new GemLifecycleJob { A = m_Access, OverflowSlots = m_GemOverflowSlots }.Schedule(chain);
+            chain = new TemporaryZoneJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new PlayerAutoAttackJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new EnemyRangedAttackJob { A = m_Access, Dt = dt }.Schedule(chain);
             chain = new PublishSimulationSnapshotJob { A = m_Access }.Schedule(chain);

@@ -36,6 +36,7 @@ namespace GameHolder.PureDots
     [System.Serializable]
     public class ArtifactChestSettings
     {
+        public Texture2D Texture;
         [Tooltip("Choose one artifact per chest. Offers are distinct; fewer cards appear when the eligible roster is smaller.")]
         [Range(1, RewardSelection.MaxChoices)] public int ChoicesPerChest = 2;
         [Tooltip("Maximum artifact types blocked from chest drops per run. Zero disables blocking; Restart clears blocked types.")]

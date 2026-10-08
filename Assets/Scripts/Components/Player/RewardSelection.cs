@@ -168,12 +168,19 @@ namespace GameHolder.PureDots
                         (unusedWeapons == 0 || !OfferedWeapon(ref previous, i)) && selected-- == 0)
                         return new RewardChoice { Kind = RewardKind.NewWeapon, WeaponIndex = i, Name = catalog.Weapons[i].Name };
             }
+            return StatChoice(ref random, loadout, ref catalog, ref previous);
+        }
+
+        public static RewardChoice StatChoice(ref Random random, PlayerLoadout loadout, ref RewardCatalog catalog,
+            ref FixedList4096Bytes<RewardChoice> previous, CharacterUpgradeStats characterStats = CharacterUpgradeStats.All,
+            WeaponUpgradeStats weaponStats = WeaponUpgradeStats.All)
+        {
             int3 masks = default, eligibleMasks = default;
             float3 weights = default;
             for (int target = 0; target <= loadout.Count; target++)
             {
                 ref var weapon = ref catalog.Weapons[target == 2 ? loadout.SecondIndex : loadout.FirstIndex];
-                int mask = StatMask(catalog.CharacterStats, weapon.Stats, weapon.Config, target);
+                int mask = StatMask(catalog.CharacterStats & characterStats, weapon.Stats & weaponStats, weapon.Config, target);
                 eligibleMasks[target] = mask;
                 for (int i = 0; i < previous.Length; i++)
                     if (previous[i].Kind == RewardKind.StatUpgrade && previous[i].Target == target)
@@ -197,6 +204,7 @@ namespace GameHolder.PureDots
                 if (targetRoll < weights[i]) break;
                 targetRoll -= weights[i];
             }
+            if (masks[chosenTarget] == 0) return default;
             int chosenStat = random.NextInt(math.countbits((uint)masks[chosenTarget]));
             UpgradeStat stat = default;
             for (int i = 0; i <= (int)UpgradeStat.Lifetime; i++)
@@ -215,7 +223,7 @@ namespace GameHolder.PureDots
         }
 
         public static bool MatchesPrompt(SimulationRunState run, PlayerStats stats, SimulationCommand command)
-            => run.Rewards.Active != 0 && run.Rewards.Choices.Length > 0 && stats.IsDead == 0 &&
+            => run.Zone.ReceiptActive == 0 && run.Rewards.Active != 0 && run.Rewards.Choices.Length > 0 && stats.IsDead == 0 &&
                 command.PromptId == run.Rewards.PromptId && command.Generation == run.Generation;
 
         public static bool Reroll(ref SimulationRunState run, PlayerStats stats, ref RewardCatalog catalog, SimulationCommand command)
@@ -253,7 +261,20 @@ namespace GameHolder.PureDots
                 run.Loadout.SecondLevel = 1;
                 run.Loadout.Count++;
             }
-            else if (choice.Target == 0)
+            else if (!ApplyStat(ref run, ref stats, ref firstWeapon, baseline, choice)) return false;
+            if (choice.Kind == RewardKind.Artifact) run.PendingChests--;
+            else run.Rewards.Pending--;
+            run.Rewards.Active = 0;
+            ArtifactRoll.Open(ref run, ref catalog);
+            Open(ref run.Rewards, run.Loadout, ref catalog);
+            return true;
+        }
+
+        public static bool ApplyStat(ref SimulationRunState run, ref PlayerStats stats, ref PlayerWeapon firstWeapon,
+            StartingPlayerConfig baseline, RewardChoice choice)
+        {
+            if (choice.Kind != RewardKind.StatUpgrade || !math.isfinite(choice.Bonus) || choice.Bonus <= 0) return false;
+            if (choice.Target == 0)
             {
                 run.Loadout.CharacterBonuses.Add(choice.Stat, choice.Bonus);
                 run.Inventory.Apply(ref stats, baseline.Stats, run.Loadout.CharacterBonuses);
@@ -271,11 +292,6 @@ namespace GameHolder.PureDots
                 run.Loadout.SecondLevel = math.max(1u, run.Loadout.SecondLevel) + 1;
             }
             else return false;
-            if (choice.Kind == RewardKind.Artifact) run.PendingChests--;
-            else run.Rewards.Pending--;
-            run.Rewards.Active = 0;
-            ArtifactRoll.Open(ref run, ref catalog);
-            Open(ref run.Rewards, run.Loadout, ref catalog);
             return true;
         }
     }

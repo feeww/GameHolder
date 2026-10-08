@@ -40,6 +40,12 @@ namespace GameHolder.PureDots
         [SerializeField] private RewardSettings m_Rewards = new RewardSettings();
         public RewardSettings Rewards => m_Rewards;
 
+        [Header("Temporary Stat Zones (applied on Play)")]
+        [SerializeField] private TemporaryZoneSettings m_TemporaryZones = new TemporaryZoneSettings();
+        public TemporaryZoneSettings TemporaryZones => m_TemporaryZones;
+        public Camera GameCamera => m_Camera;
+        private TemporaryZonePresentation m_ZonePresentation;
+
         [Header("Artifact Chests (choose one artifact per chest)")]
         [SerializeField] private ArtifactDefinition[] m_Artifacts = new ArtifactDefinition[0];
         [SerializeField] private ArtifactChestSettings m_ArtifactChests = new ArtifactChestSettings();
@@ -140,6 +146,11 @@ namespace GameHolder.PureDots
 
             // Setup procedural infinite floor quad
             CreateFloorQuad();
+            if (TryValidateConfiguration(out _))
+            {
+                m_ZonePresentation = gameObject.AddComponent<TemporaryZonePresentation>();
+                m_ZonePresentation.Initialize(m_TemporaryZones, m_Camera);
+            }
         }
 
         public bool TryValidateConfiguration(out string error)
@@ -183,6 +194,9 @@ namespace GameHolder.PureDots
             { error = $"Assign at most {ArtifactInventory.Capacity} different artifacts."; return false; }
             if (m_Rewards == null) { error = "Configure Level-up Rewards."; return false; }
             if (!m_Rewards.TryValidate(m_StartingCharacter, m_StartingWeaponAsset != null ? m_StartingWeaponAsset : m_StartingCharacter.Weapon, out error)) return false;
+            if (m_TemporaryZones == null) { error = "Configure Temporary Stat Zones."; return false; }
+            if (!m_TemporaryZones.TryValidate(m_Rewards, m_StartingCharacter,
+                m_StartingWeaponAsset != null ? m_StartingWeaponAsset : m_StartingCharacter.Weapon, out error)) return false;
             foreach (var artifact in artifacts) if (!artifact.TryValidate(out error, m_Rewards)) return false;
             if (m_ArtifactChests == null) { error = "Configure Artifact Chests."; return false; }
             if (!m_ArtifactChests.TryValidate(artifacts, m_Rewards, out error)) return false;
@@ -229,6 +243,7 @@ namespace GameHolder.PureDots
             UpdateFloorPhase();
         }
         public void ResetFloorPhase() { m_FloorPhase = Unity.Mathematics.float2.zero; UpdateFloorPhase(); }
+        public void ApplyZoneSnapshot(SimulationSnapshot snapshot) => m_ZonePresentation?.ApplySnapshot(snapshot);
         private void UpdateFloorPhase()
         {
             if (m_FloorRenderer == null) return;

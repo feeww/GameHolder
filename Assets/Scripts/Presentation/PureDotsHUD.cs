@@ -25,6 +25,12 @@ namespace GameHolder.PureDots
         private readonly UnityEngine.UI.Button[] m_BlockArtifactButtons = new UnityEngine.UI.Button[RewardSelection.MaxChoices];
         private UnityEngine.UI.Button m_RerollButton;
         private BatchedHudText m_RerollLabel;
+        private RectTransform m_Canvas, m_ZoneRewardWindow;
+        private GameObject m_ZoneRewardPanel;
+        private BatchedHudText m_ZoneRewardTitle, m_ZoneRewardLabel;
+        private UnityEngine.UI.Button m_ZoneOK;
+        private bool m_ZoneQueued;
+        private uint m_ZoneReceipt, m_ZoneGeneration;
         private readonly UnityEngine.UI.RawImage[] m_WeaponIcons = new UnityEngine.UI.RawImage[PlayerLoadout.Capacity];
         private readonly UnityEngine.UI.Button[] m_WeaponButtons = new UnityEngine.UI.Button[PlayerLoadout.Capacity];
         private readonly BatchedHudText[] m_WeaponLabels = new BatchedHudText[PlayerLoadout.Capacity];
@@ -52,6 +58,7 @@ namespace GameHolder.PureDots
             Instance = this;
             var root = new GameObject("HUD canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             root.transform.SetParent(transform, false);
+            m_Canvas = (RectTransform)root.transform;
             var canvas = root.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = HudLayout.SortingOrder; canvas.pixelPerfect = true;
             var left = Panel("Stats panel", root.transform, HudLayout.StatsPanelSize, HudLayout.StatsPanelPosition, Vector2.up);
             m_Stats = Text("Stats", left, HudLayout.StatsTextSize, HudLayout.StatsTextPosition, "");
@@ -138,6 +145,19 @@ namespace GameHolder.PureDots
                 m_ArtifactLabels[i] = Text("Artifact stats", row, new Vector2(490, 106), new Vector2(100, 4), "");
             }
             Button(m_InventoryWindow, 520, "Close inventory (Esc)", CloseInventory);
+            var receipt = Panel("Zone reward overlay", root.transform, Vector2.zero, Vector2.zero, Vector2.zero);
+            receipt.anchorMin = Vector2.zero; receipt.anchorMax = Vector2.one; receipt.offsetMin = receipt.offsetMax = Vector2.zero;
+            receipt.GetComponent<Image>().color = new Color(0, 0, 0, .65f); receipt.GetComponent<Image>().raycastTarget = true;
+            m_ZoneRewardPanel = receipt.gameObject;
+            m_ZoneRewardWindow = Panel("Zone reward confirmation", receipt, new Vector2(380, 280), new Vector2(-190, -140), new Vector2(.5f, .5f));
+            m_ZoneRewardWindow.GetComponent<Image>().raycastTarget = true;
+            var receiptColor = HudLayout.PanelColor; receiptColor.a = 1;
+            m_ZoneRewardWindow.GetComponent<Image>().color = receiptColor;
+            m_ZoneRewardTitle = Text("Received title", m_ZoneRewardWindow, new Vector2(350, 42), new Vector2(15, 12), "ZONE REWARD RECEIVED");
+            m_ZoneRewardLabel = Text("Received boost", m_ZoneRewardWindow, new Vector2(350, 140), new Vector2(15, 62), "");
+            var ok = RewardButton(m_ZoneRewardWindow, new Vector2(50, 226), "OK", AcknowledgeZoneReward, out m_ZoneOK);
+            ((RectTransform)m_ZoneOK.transform).sizeDelta = new Vector2(280, 36);
+            ok.rectTransform.sizeDelta = new Vector2(260, 30); ok.rectTransform.anchoredPosition = new Vector2(10, -4); ok.SetText("OK");
             if (EventSystem.current == null)
             {
                 var events = new GameObject("HUD event system", typeof(EventSystem), typeof(InputSystemUIInputModule));
@@ -156,6 +176,7 @@ namespace GameHolder.PureDots
             m_RewardPanel.SetActive(false);
             m_WeaponDetailsPanel.SetActive(false);
             m_InventoryPanel.SetActive(false);
+            m_ZoneRewardPanel.SetActive(false);
             RefreshText();
         }
         private static RectTransform Rect(string name, Transform parent, Vector2 size, Vector2 position, Vector2 anchor)
@@ -197,7 +218,12 @@ namespace GameHolder.PureDots
             System.Array.Copy(m_Pending, sent, m_Pending, 0, m_PendingCount);
             RefreshText();
         }
-        public void Unbind() { m_Bound = false; m_PendingCount = 0; CloseWeaponDetails(); if (m_InventoryPanel != null) m_InventoryPanel.SetActive(false); }
+        public void Unbind()
+        {
+            m_Bound = false; m_PendingCount = 0; CloseWeaponDetails();
+            if (m_InventoryPanel != null) m_InventoryPanel.SetActive(false);
+            if (m_ZoneRewardPanel != null) m_ZoneRewardPanel.SetActive(false);
+        }
         public void BindArtifacts(IReadOnlyList<ArtifactDefinition> artifacts, Texture2D bagTexture, Rect? bagUV = null)
         {
             m_Artifacts = artifacts ?? System.Array.Empty<ArtifactDefinition>();
@@ -207,7 +233,7 @@ namespace GameHolder.PureDots
         }
         private void OpenInventory()
         {
-            if (!m_Bound || m_Snapshot.InventoryOpen != 0 || m_PendingCount >= m_Pending.Length) return;
+            if (!m_Bound || m_Snapshot.Zone.ReceiptActive != 0 || m_Snapshot.InventoryOpen != 0 || m_PendingCount >= m_Pending.Length) return;
             CloseWeaponDetails();
             m_Pending[m_PendingCount++] = new SimulationCommand { Kind = SimulationCommandKind.Inventory, Value = 1, Generation = m_Snapshot.Generation };
         }
@@ -218,7 +244,7 @@ namespace GameHolder.PureDots
         }
         private void RefreshInventory()
         {
-            m_InventoryButton.interactable = m_Bound;
+            m_InventoryButton.interactable = m_Bound && m_Snapshot.Zone.ReceiptActive == 0;
             bool open = m_Bound && m_Snapshot.InventoryOpen != 0;
             if (m_InventoryPanel.activeSelf != open) m_InventoryPanel.SetActive(open);
             if (!open) return;
@@ -348,6 +374,13 @@ namespace GameHolder.PureDots
             return Text("Label", rect, new Vector2(260, 130), new Vector2(10, 8), "");
         }
         private void ChooseReward(int slot) => QueueRewardAction(SimulationCommandKind.SelectReward, slot);
+        private void AcknowledgeZoneReward()
+        {
+            if (!m_Bound || m_ZoneQueued || m_Snapshot.Zone.ReceiptActive == 0 || m_PendingCount >= m_Pending.Length) return;
+            m_Pending[m_PendingCount++] = new SimulationCommand { Kind = SimulationCommandKind.AcknowledgeZoneReward,
+                Generation = m_Snapshot.Generation, PromptId = m_Snapshot.Zone.ReceiptId };
+            m_ZoneQueued = true; m_ZoneOK.interactable = false;
+        }
         private void BlockArtifact(int slot)
         {
             if (slot < 0 || slot >= m_Snapshot.Rewards.Choices.Length || m_Snapshot.Rewards.Choices[slot].Kind != RewardKind.Artifact ||
@@ -362,7 +395,7 @@ namespace GameHolder.PureDots
         }
         private void QueueRewardAction(SimulationCommandKind kind, int slot)
         {
-            if (!m_Bound || m_RewardQueued || m_Snapshot.Player.IsDead != 0 || m_Snapshot.InventoryOpen != 0 || m_Snapshot.Rewards.Active == 0 || slot < 0 ||
+            if (!m_Bound || m_RewardQueued || m_Snapshot.Zone.ReceiptActive != 0 || m_Snapshot.Player.IsDead != 0 || m_Snapshot.InventoryOpen != 0 || m_Snapshot.Rewards.Active == 0 || slot < 0 ||
                 slot >= m_Snapshot.Rewards.Choices.Length || m_PendingCount >= m_Pending.Length) return;
             m_Pending[m_PendingCount++] = new SimulationCommand { Kind = kind, Value = slot,
                 PromptId = m_Snapshot.Rewards.PromptId, Generation = m_Snapshot.Generation };
@@ -419,7 +452,8 @@ namespace GameHolder.PureDots
             bool dead = m_Snapshot.Player.IsDead != 0;
             if (dead) CloseWeaponDetails();
             RefreshWeapons();
-            RefreshRewards(!dead && m_Snapshot.Rewards.Active != 0);
+            RefreshZoneReceipt(!dead && m_Snapshot.Zone.ReceiptActive != 0);
+            RefreshRewards(!dead && m_Snapshot.Zone.ReceiptActive == 0 && m_Snapshot.Rewards.Active != 0);
             RefreshInventory();
             if (m_DeathPanel.activeSelf != dead) m_DeathPanel.SetActive(dead);
             if (!dead) return;
@@ -495,9 +529,27 @@ namespace GameHolder.PureDots
             m_RewardTitle.SetText(m_Text, m_Length);
             if (count > 0 && EventSystem.current != null) EventSystem.current.SetSelectedGameObject(m_RewardButtons[0].gameObject);
         }
-        private void RewardText(BatchedHudText label, RewardChoice choice, uint slot)
+        private void RefreshZoneReceipt(bool active)
         {
-            m_Length = 0; AppendNumber(slot); Append(". ");
+            bool opened = active && !m_ZoneRewardPanel.activeSelf;
+            if (m_ZoneRewardPanel.activeSelf != active) m_ZoneRewardPanel.SetActive(active);
+            if (!active) { m_ZoneQueued = false; return; }
+            float scale = Mathf.Min(1, (Screen.width - 20f) / 380, (Screen.height - 20f) / 280);
+            m_ZoneRewardWindow.localScale = Vector3.one * scale;
+            m_ZoneRewardWindow.anchoredPosition = new Vector2(-190, 140) * scale;
+            if (!opened && m_ZoneReceipt == m_Snapshot.Zone.ReceiptId && m_ZoneGeneration == m_Snapshot.Generation) return;
+            m_ZoneReceipt = m_Snapshot.Zone.ReceiptId; m_ZoneGeneration = m_Snapshot.Generation; m_ZoneQueued = false;
+            CloseWeaponDetails();
+            var bootstrap = GamePresentationBootstrap.Instance;
+            m_ZoneRewardTitle.SetText(bootstrap != null ? bootstrap.TemporaryZones.RewardTitle : "ZONE REWARD RECEIVED");
+            RewardText(m_ZoneRewardLabel, m_Snapshot.Zone.Reward, 0, true);
+            m_ZoneOK.interactable = true;
+            if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(m_ZoneOK.gameObject);
+        }
+        private void RewardText(BatchedHudText label, RewardChoice choice, uint slot, bool received = false)
+        {
+            m_Length = 0;
+            if (slot > 0) { AppendNumber(slot); Append(". "); }
             if (choice.Kind == RewardKind.Artifact)
             {
                 Append(choice.Name);
@@ -521,7 +573,11 @@ namespace GameHolder.PureDots
                 Append("\n");
                 var asset = WeaponAsset(RewardWeaponIndex(choice));
                 Append(choice.Target == 0 ? "Character" : asset != null ? WeaponName(RewardWeaponIndex(choice)) : choice.Target == 1 ? "Weapon 1" : "Weapon 2", 20);
-                if (choice.Target != 0) { Append("\nLevel "); AppendNumber(WeaponLevel(choice.Target - 1)); Append(" -> "); AppendNumber(WeaponLevel(choice.Target - 1) + 1); }
+                if (choice.Target != 0)
+                {
+                    Append("\nLevel "); AppendNumber(WeaponLevel(choice.Target - 1));
+                    if (!received) { Append(" -> "); AppendNumber(WeaponLevel(choice.Target - 1) + 1); }
+                }
                 Append("\n");
                 switch (choice.Stat)
                 {

@@ -215,6 +215,7 @@ namespace GameHolder.PureDots
             em.AddComponentData(runEntity, new SimulationRunState { Player = player, AutoAttack = 1, Generation = 1,
                 Loadout = RewardRoll.StartingLoadout(), Rewards = new RewardSelection { RandomState = RewardRoll.SeedForRun(ref rewards.Value, 1) },
                 ArtifactRandomState = ArtifactRoll.SeedForRun(ref rewards.Value, 1),
+                Zone = new TemporaryZoneState { RandomState = TemporaryZone.SeedForRun(ref rewards.Value, 1) },
                 PlayerCollisionRadius = startingPlayer.Stats.CollisionRadius });
             em.AddComponentData(runEntity, new SimulationSnapshot { Player = startingPlayer.Stats, FirstWeapon = startingPlayer.Weapon,
                 Loadout = RewardRoll.StartingLoadout(), AutoAttack = 1, Generation = 1,
