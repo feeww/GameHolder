@@ -54,7 +54,7 @@ namespace GameHolder.PureDots.Tests
                 m_Em.SetComponentData(m_Wave, wave);
                 Command(SimulationCommandKind.SpawnExtra, 1000); Tick(0);
                 Assert.That(Snapshot.ActiveEnemies, Is.Zero);
-                Assert.That(pool.InactiveEnemies.Count, Is.EqualTo(SimulationConstants.MaxEnemies));
+                Assert.That(pool.InactiveEnemies.Length, Is.EqualTo(SimulationConstants.DefaultMaxEnemies));
                 Assert.That(m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).RandomSeed, Is.EqualTo(wave.RandomSeed));
                 catalog.Value.Configs[1].AvailableAfterSeconds = 0;
                 catalog.Value.Configs[2].AvailableAfterSeconds = 2;
@@ -94,7 +94,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(wave.Timer, Is.Zero); Assert.That(wave.LargeSpawnTimer, Is.Zero);
             wave.SpawnRateScalingInterval = 1; wave.SpawnRateMultiplier = float.MaxValue;
             m_Em.SetComponentData(m_Wave, wave);
-            Tick(1); Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(SimulationConstants.MaxEnemies));
+            Tick(1); Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(SimulationConstants.DefaultMaxEnemies));
             Command(SimulationCommandKind.Restart); Tick(0);
             settings.SpawnInterval = 0; settings.EnableLargeSpawns = false;
             m_Em.SetComponentData(m_Wave, settings.ToConfig());

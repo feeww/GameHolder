@@ -18,7 +18,7 @@ namespace GameHolder.PureDots.Editor
             new GUIContent("World Rewards", "Capture zones, artifact roster and chest rewards."),
             new GUIContent("Presentation", "Camera, floor, inventory artwork and placeholder audio.") };
         private static readonly string[][] PageProperties = { null, null, null,
-            new[] { "m_StartingCharacter", "m_StartingWeaponAsset", "m_EnemyTypes" },
+            new[] { "m_StartingCharacter", "m_StartingWeaponAsset", "m_EnemyTypes", "m_MaxEnemies", "m_MaxGems", "m_MaxPlayerProjectiles", "m_MaxEnemyProjectiles" },
             new[] { "m_EnemySpawning", "m_EliteSpawnProbability", "m_EliteHealthMultiplier", "m_EliteSpeedMultiplier", "m_EliteSizeMultiplier", "m_EliteMassMultiplier", "m_EliteDamageMultiplier", "m_EliteExperienceMultiplier", "m_EliteChestDropChanceMultiplier" },
             new[] { "m_Rewards" },
             new[] { "m_TemporaryZones", "m_Artifacts", "m_ArtifactChests" },

@@ -1,22 +1,32 @@
 using Unity.Mathematics;
+using Unity.Entities;
 
 namespace GameHolder.PureDots
 {
     public static class SimulationConstants
     {
-        public const int MaxEnemies = 10000;
-        public const int MaxProjectiles = 5000; // Per pool; 10,000 player and enemy projectiles combined.
-        public const int MaxGems = 1024;
+        public const int DefaultMaxEnemies = 10000;
+        public const int DefaultMaxProjectiles = 5000;
+        public const int DefaultMaxGems = 1024;
         public const float FloatingOriginThreshold = 2000.0f;
         public const float FloatingOriginThresholdSq = FloatingOriginThreshold * FloatingOriginThreshold;
 
         public const int JobBatchSize = 128;
-        public const int EnemyGridCapacity = MaxEnemies * 2;
-        public const int CrowdGridCapacity = MaxEnemies * 8;
-        public const int DamageBufferCapacity = MaxProjectiles + MaxEnemies * 2;
-        public const int DeactivationBufferCapacity = MaxProjectiles * 4;
         public const int CosmeticQueueCapacity = 128;
         public const int CommandQueueCapacity = 64;
         public static float2 DebugRebaseOffset => new float2(FloatingOriginThreshold + 100.25f, FloatingOriginThreshold + 100.75f);
+    }
+
+    public struct PoolLimits : IComponentData
+    {
+        public int MaxEnemies, MaxGems, MaxPlayerProjectiles, MaxEnemyProjectiles;
+        public static PoolLimits Defaults => new PoolLimits
+        {
+            MaxEnemies = SimulationConstants.DefaultMaxEnemies, MaxGems = SimulationConstants.DefaultMaxGems,
+            MaxPlayerProjectiles = SimulationConstants.DefaultMaxProjectiles, MaxEnemyProjectiles = SimulationConstants.DefaultMaxProjectiles
+        };
+        public bool IsValid => MaxEnemies > 0 && MaxGems > 0 && MaxPlayerProjectiles > 0 && MaxEnemyProjectiles > 0 &&
+            MaxEnemies <= int.MaxValue / 8 && (long)MaxPlayerProjectiles + MaxEnemies * 2L <= int.MaxValue &&
+            (MaxPlayerProjectiles + (long)MaxEnemyProjectiles) * 2 <= int.MaxValue;
     }
 }

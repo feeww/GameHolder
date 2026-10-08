@@ -133,10 +133,6 @@ namespace GameHolder.PureDots
             m_ReadEnemies = state.GetComponentLookup<EnemyActiveTag>(true);
             m_ReadTypes = state.GetComponentLookup<TypeId>(true);
             m_ReadRangedCooldown = state.GetComponentLookup<EnemyRangedCooldown>(true);
-            m_Damage = new NativeList<DamageEvent>(SimulationConstants.DamageBufferCapacity, Allocator.Persistent);
-            m_Deactivations = new NativeList<Entity>(SimulationConstants.DeactivationBufferCapacity, Allocator.Persistent);
-            m_AreaDamage = new NativeParallelHashMap<Entity, float>(SimulationConstants.MaxEnemies, Allocator.Persistent);
-            m_GemOverflowSlots = new NativeParallelHashMap<Unity.Mathematics.int2, int>(SimulationConstants.MaxEnemies, Allocator.Persistent);
         }
 
         [BurstCompile]
@@ -164,6 +160,13 @@ namespace GameHolder.PureDots
                 m_Access.StartingPlayer = SystemAPI.GetSingleton<StartingPlayerConfig>();
                 m_Access.Rewards = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog;
                 m_Access.Zones = SystemAPI.HasSingleton<TemporaryZoneConfig>() ? SystemAPI.GetSingleton<TemporaryZoneConfig>() : default;
+                int enemies = m_Access.EnemyPool.AllEnemies.Length;
+                int playerProjectiles = m_Access.PlayerPool.AllProjectiles.Length;
+                int enemyProjectiles = m_Access.EnemyProjectilePool.AllProjectiles.Length;
+                m_Damage = new NativeList<DamageEvent>(playerProjectiles + enemies * 2, Allocator.Persistent);
+                m_Deactivations = new NativeList<Entity>((playerProjectiles + enemyProjectiles) * 2, Allocator.Persistent);
+                m_AreaDamage = new NativeParallelHashMap<Entity, float>(enemies, Allocator.Persistent);
+                m_GemOverflowSlots = new NativeParallelHashMap<Unity.Mathematics.int2, int>(enemies, Allocator.Persistent);
                 m_Bound = true;
             }
             m_Access.Update(ref state);
@@ -210,10 +213,10 @@ namespace GameHolder.PureDots
         public void OnDestroy(ref SystemState state)
         {
             state.Dependency.Complete();
-            m_Damage.Dispose();
-            m_Deactivations.Dispose();
-            m_AreaDamage.Dispose();
-            m_GemOverflowSlots.Dispose();
+            if (m_Damage.IsCreated) m_Damage.Dispose();
+            if (m_Deactivations.IsCreated) m_Deactivations.Dispose();
+            if (m_AreaDamage.IsCreated) m_AreaDamage.Dispose();
+            if (m_GemOverflowSlots.IsCreated) m_GemOverflowSlots.Dispose();
         }
     }
 }

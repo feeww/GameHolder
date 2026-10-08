@@ -9,7 +9,7 @@ namespace GameHolder.PureDots
     {
         public ulong ExperienceValue;
         public uint Tier;            // 4 bytes
-        public uint SlotIndex;       // 4 bytes (0 to 1023, links entity to AllGems in O(1))
+        public uint SlotIndex;       // Index in AllGems or AllChests, selected by IsChest.
         public byte IsChest;
     }
 
@@ -31,11 +31,10 @@ namespace GameHolder.PureDots
 
     public struct GemPoolSingleton : IComponentData
     {
-        public const int Capacity = SimulationConstants.MaxGems; // Single Source of Truth
-        public UnsafeQueue<Entity> FreeGems;
-        public UnsafeList<GemSpatialRecord> AllGems; // Exactly 1024 slots (32 KB, L1D cache)
+        public NativeRingQueue<Entity> FreeGems;
+        public UnsafeList<GemSpatialRecord> AllGems;
         public const int ChestCapacity = 128;
-        public UnsafeQueue<Entity> FreeChests;
+        public NativeRingQueue<Entity> FreeChests;
         public UnsafeList<ArtifactChest> AllChests;
     }
 

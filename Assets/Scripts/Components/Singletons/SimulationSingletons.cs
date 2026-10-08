@@ -15,8 +15,7 @@ namespace GameHolder.PureDots
 
     public struct EnemyPoolSingleton : IComponentData
     {
-        public const int Capacity = SimulationConstants.MaxEnemies;
-        public UnsafeQueue<Entity> InactiveEnemies;
+        public NativeRingQueue<Entity> InactiveEnemies;
         public UnsafeList<Entity> AllEnemies;
     }
 

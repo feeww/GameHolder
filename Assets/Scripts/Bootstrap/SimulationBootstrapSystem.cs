@@ -26,6 +26,8 @@ namespace GameHolder.PureDots
             if (m_Initialized) return;
             if (!SystemAPI.HasSingleton<StartingPlayerConfig>() ||
                 !SystemAPI.HasSingleton<EnemyConfigCatalogSingleton>() || !SystemAPI.HasSingleton<RewardCatalogSingleton>()) return;
+            var limits = SystemAPI.HasSingleton<PoolLimits>() ? SystemAPI.GetSingleton<PoolLimits>() : PoolLimits.Defaults;
+            if (!limits.IsValid) throw new System.ArgumentException("Pool limits must be positive and fit simulation buffer capacities.");
             if (!SystemAPI.HasSingleton<PureDotsPrefabsSingleton>())
                 state.EntityManager.AddComponentData(state.EntityManager.CreateEntity(), CreatePrefabs(state.EntityManager, SystemAPI.GetSingleton<StartingPlayerConfig>()));
             m_Initialized = true;
@@ -45,14 +47,13 @@ namespace GameHolder.PureDots
                 em.AddComponentData(em.CreateEntity(), RunDefaults.Wave);
 
             // 5. Spatial Hash Grids (2x over-provisioning for load factor <= 0.5)
-            const int maxEnemies = EnemyPoolSingleton.Capacity;
-            const int maxProjectiles = PlayerProjectilePoolSingleton.Capacity;
+            int maxEnemies = limits.MaxEnemies;
 
             var enemyGridEntity = em.CreateEntity();
             em.AddComponentData(enemyGridEntity, new EnemySpatialGridSingleton
             {
-                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(SimulationConstants.EnemyGridCapacity, Allocator.Persistent),
-                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(SimulationConstants.CrowdGridCapacity, Allocator.Persistent)
+                Grid = new UnsafeParallelMultiHashMap<uint, GridEntry>(maxEnemies * 2, Allocator.Persistent),
+                CrowdCells = new UnsafeParallelHashMap<int2, CrowdCell>(maxEnemies * 8, Allocator.Persistent)
             });
 
             // 6. Combat queues
@@ -90,19 +91,19 @@ namespace GameHolder.PureDots
                 GemCollectEventQueue = new UnsafeQueue<GemCollectEvent>(Allocator.Persistent)
             });
 
-            // 8. Experience Gem Pool (Preallocated to EXACTLY 1024 entities - Single Source of Truth)
+            // 8. Experience gems and artifact chests
             var gemPoolSingleton = new GemPoolSingleton
             {
-                FreeGems = new UnsafeQueue<Entity>(Allocator.Persistent),
-                AllGems = new UnsafeList<GemSpatialRecord>(GemPoolSingleton.Capacity, Allocator.Persistent),
-                FreeChests = new UnsafeQueue<Entity>(Allocator.Persistent),
+                FreeGems = new NativeRingQueue<Entity>(limits.MaxGems, Allocator.Persistent),
+                AllGems = new UnsafeList<GemSpatialRecord>(limits.MaxGems, Allocator.Persistent),
+                FreeChests = new NativeRingQueue<Entity>(GemPoolSingleton.ChestCapacity, Allocator.Persistent),
                 AllChests = new UnsafeList<ArtifactChest>(GemPoolSingleton.ChestCapacity, Allocator.Persistent)
             };
 
-            var preallocatedGems = CollectionHelper.CreateNativeArray<Entity>(GemPoolSingleton.Capacity, Allocator.Temp);
+            var preallocatedGems = CollectionHelper.CreateNativeArray<Entity>(limits.MaxGems, Allocator.Temp);
             em.Instantiate(prefabs.GemPrefab, preallocatedGems);
 
-            for (int i = 0; i < GemPoolSingleton.Capacity; i++)
+            for (int i = 0; i < limits.MaxGems; i++)
             {
                 Entity gem = preallocatedGems[i];
                 em.SetComponentData(gem, new GemData
@@ -144,7 +145,7 @@ namespace GameHolder.PureDots
             // 9. Enemy Pool Preallocation
             var enemyPoolSingleton = new EnemyPoolSingleton
             {
-                InactiveEnemies = new UnsafeQueue<Entity>(Allocator.Persistent),
+                InactiveEnemies = new NativeRingQueue<Entity>(maxEnemies, Allocator.Persistent),
                 AllEnemies = new UnsafeList<Entity>(maxEnemies, Allocator.Persistent)
             };
 
@@ -167,13 +168,13 @@ namespace GameHolder.PureDots
             // 10. Projectile Pools Preallocation (Player & Enemy)
             var playerProjPoolSingleton = new PlayerProjectilePoolSingleton
             {
-                InactiveProjectiles = new UnsafeQueue<Entity>(Allocator.Persistent),
-                AllProjectiles = new UnsafeList<Entity>(maxProjectiles, Allocator.Persistent)
+                InactiveProjectiles = new NativeRingQueue<Entity>(limits.MaxPlayerProjectiles, Allocator.Persistent),
+                AllProjectiles = new UnsafeList<Entity>(limits.MaxPlayerProjectiles, Allocator.Persistent)
             };
 
-            var preallocatedPlayerProj = CollectionHelper.CreateNativeArray<Entity>(maxProjectiles, Allocator.Temp);
+            var preallocatedPlayerProj = CollectionHelper.CreateNativeArray<Entity>(limits.MaxPlayerProjectiles, Allocator.Temp);
             em.Instantiate(prefabs.PlayerProjPrefab, preallocatedPlayerProj);
-            for (int i = 0; i < maxProjectiles; i++)
+            for (int i = 0; i < limits.MaxPlayerProjectiles; i++)
             {
                 Entity proj = preallocatedPlayerProj[i];
                 em.SetComponentEnabled<ProjectileActiveTag>(proj, false);
@@ -187,13 +188,13 @@ namespace GameHolder.PureDots
 
             var enemyProjPoolSingleton = new EnemyProjectilePoolSingleton
             {
-                InactiveProjectiles = new UnsafeQueue<Entity>(Allocator.Persistent),
-                AllProjectiles = new UnsafeList<Entity>(maxProjectiles, Allocator.Persistent)
+                InactiveProjectiles = new NativeRingQueue<Entity>(limits.MaxEnemyProjectiles, Allocator.Persistent),
+                AllProjectiles = new UnsafeList<Entity>(limits.MaxEnemyProjectiles, Allocator.Persistent)
             };
 
-            var preallocatedEnemyProj = CollectionHelper.CreateNativeArray<Entity>(maxProjectiles, Allocator.Temp);
+            var preallocatedEnemyProj = CollectionHelper.CreateNativeArray<Entity>(limits.MaxEnemyProjectiles, Allocator.Temp);
             em.Instantiate(prefabs.EnemyProjPrefab, preallocatedEnemyProj);
-            for (int i = 0; i < maxProjectiles; i++)
+            for (int i = 0; i < limits.MaxEnemyProjectiles; i++)
             {
                 Entity proj = preallocatedEnemyProj[i];
                 em.SetComponentEnabled<ProjectileActiveTag>(proj, false);

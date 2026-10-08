@@ -233,6 +233,10 @@ namespace GameHolder.PureDots.Tests
             m_Em.SetComponentData(m_Run, run);
             ref var system = ref m_World.Unmanaged.ResolveSystemStateRef(m_Pipeline);
             var access = new SimulationAccess { State = m_Run, InputEntity = m_Input, Zones = config, StartingPlayer = DefaultPlayer,
+                EnemyPool = m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>(),
+                PlayerPool = m_Em.CreateEntityQuery(typeof(PlayerProjectilePoolSingleton)).GetSingleton<PlayerProjectilePoolSingleton>(),
+                EnemyProjectilePool = m_Em.CreateEntityQuery(typeof(EnemyProjectilePoolSingleton)).GetSingleton<EnemyProjectilePoolSingleton>(),
+                GemPool = m_Em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>(),
                 Rewards = m_Em.CreateEntityQuery(typeof(RewardCatalogSingleton)).GetSingleton<RewardCatalogSingleton>().Catalog };
             access.Initialize(ref system);
             var handle = new TemporaryZoneJob { A = access, Dt = 5 }.Schedule();

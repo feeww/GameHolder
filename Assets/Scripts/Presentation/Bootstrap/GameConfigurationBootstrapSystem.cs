@@ -39,6 +39,7 @@ namespace GameHolder.PureDots
             }
 
             var em = EntityManager;
+            em.AddComponentData(em.CreateEntity(), Settings.Pools);
             var character = Settings.StartingCharacter;
             var startingWeapon = Settings.StartingWeaponAsset != null ? Settings.StartingWeaponAsset : character.Weapon;
             var player = character.ToConfig(startingWeapon);

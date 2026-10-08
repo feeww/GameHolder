@@ -10,7 +10,7 @@ namespace GameHolder.PureDots
         [Tooltip("Seconds between regular batches. Zero disables regular spawning.")]
         [Min(0)] public float SpawnInterval = RunDefaults.Wave.SpawnInterval;
         [Tooltip("Enemies per regular batch before scaling, limited by the available enemy pool.")]
-        [Range(1, SimulationConstants.MaxEnemies)] public int BatchSize = RunDefaults.Wave.BatchSize;
+        [Min(1)] public int BatchSize = RunDefaults.Wave.BatchSize;
         [Tooltip("Minimum spawn distance from the player, in world units.")]
         [Min(1)] public float MinRadius = RunDefaults.Wave.MinRadius;
         [Tooltip("Maximum spawn distance in world units; must exceed Min Radius by at least one.")]
@@ -38,7 +38,7 @@ namespace GameHolder.PureDots
         [Tooltip("Active run seconds between additional large batches; pauses stop this timer.")]
         [Min(.01f)] public float LargeSpawnInterval = 30;
         [Tooltip("Additional enemies per large spawn, subject to the shared enemy pool limit.")]
-        [Range(1, SimulationConstants.MaxEnemies)] public int LargeSpawnCount = 100;
+        [Min(1)] public int LargeSpawnCount = 100;
 
         public WaveSpawnerConfig ToConfig() => new WaveSpawnerConfig
         {
@@ -53,15 +53,15 @@ namespace GameHolder.PureDots
         {
             if (!math.all(math.isfinite(new float4(SpawnInterval, MinRadius, MaxRadius, SpawnRateScalingInterval))) ||
                 SpawnInterval < 0 || MinRadius < 1 || MaxRadius < MinRadius + 1 || SpawnRateScalingInterval < 0 ||
-                BatchSize < 1 || BatchSize > SimulationConstants.MaxEnemies)
-            { error = "Enemy spawning requires finite nonnegative intervals, 1-10000 enemies per batch, and radii with at least 1 unit between them."; return false; }
+                BatchSize < 1)
+            { error = "Enemy spawning requires finite nonnegative intervals, positive batch sizes, and radii with at least 1 unit between them."; return false; }
             if (!math.isfinite(StatScalingInterval) || StatScalingInterval < 0 ||
                 !math.all(math.isfinite(new float4(SpawnRateMultiplier, HealthMultiplier, SpeedMultiplier, DamageMultiplier))) ||
                 SpawnRateMultiplier < 1 || HealthMultiplier < 1 || SpeedMultiplier < 1 || DamageMultiplier < 1)
             { error = "Enemy scaling requires a finite nonnegative interval and finite multipliers of at least 1."; return false; }
             if (EnableLargeSpawns && (!math.isfinite(LargeSpawnInterval) || LargeSpawnInterval <= 0 ||
-                LargeSpawnCount < 1 || LargeSpawnCount > SimulationConstants.MaxEnemies))
-            { error = "Large spawns require a finite positive interval and 1-10000 additional enemies."; return false; }
+                LargeSpawnCount < 1))
+            { error = "Large spawns require a finite positive interval and a positive enemy count."; return false; }
             error = null; return true;
         }
     }

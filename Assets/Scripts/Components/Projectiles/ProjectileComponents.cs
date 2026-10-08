@@ -44,15 +44,13 @@ namespace GameHolder.PureDots
 
     public struct EnemyProjectilePoolSingleton : IComponentData
     {
-        public const int Capacity = SimulationConstants.MaxProjectiles;
-        public UnsafeQueue<Entity> InactiveProjectiles;
+        public NativeRingQueue<Entity> InactiveProjectiles;
         public UnsafeList<Entity> AllProjectiles;
     }
 
     public struct PlayerProjectilePoolSingleton : IComponentData
     {
-        public const int Capacity = SimulationConstants.MaxProjectiles;
-        public UnsafeQueue<Entity> InactiveProjectiles;
+        public NativeRingQueue<Entity> InactiveProjectiles;
         public UnsafeList<Entity> AllProjectiles;
     }
 

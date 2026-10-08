@@ -135,7 +135,7 @@ namespace GameHolder.PureDots.Tests
                 Enemy(new float2(20, 0), 0); Enemy(new float2(20, 1), 1);
                 Command(SimulationCommandKind.KillAll); Tick(0);
                 Assert.That(Snapshot.Kills, Is.EqualTo(2));
-                Assert.That(pool.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity - 1));
+                Assert.That(pool.FreeChests.Length, Is.EqualTo(GemPoolSingleton.ChestCapacity - 1));
                 Assert.That(Snapshot.Inventory.Items.Length, Is.Zero);
                 var stats = Snapshot.Player; stats.CurrentHealth = 10; m_Em.SetComponentData(m_Player, stats);
                 for (int i = 0; i < 4; i++) spawns.Enqueue(new GemSpawnRequest { IsChest = 1 });
@@ -191,7 +191,7 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(Snapshot.Inventory.Items.Length, Is.Zero); Assert.That(Snapshot.InventoryOpen, Is.Zero);
                 Assert.That(Snapshot.PendingChests, Is.Zero); Assert.That(Snapshot.Rewards.Active, Is.Zero);
                 Assert.That(Snapshot.Player.HealthRegeneration, Is.Zero); Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
-                Assert.That(pool.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity));
+                Assert.That(pool.FreeChests.Length, Is.EqualTo(GemPoolSingleton.ChestCapacity));
             }
             finally { enemies.Value.Configs[0].ChestDropChance = 0; }
         }
@@ -214,7 +214,7 @@ namespace GameHolder.PureDots.Tests
             for (int i = 0; i < GemPoolSingleton.ChestCapacity + 4; i++) SelectArtifact(0);
             Assert.That(Snapshot.Inventory.Items.Length, Is.EqualTo(1));
             Assert.That(Snapshot.Inventory.Items[0].Quantity, Is.EqualTo(GemPoolSingleton.ChestCapacity + 4));
-            Assert.That(pool.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity));
+            Assert.That(pool.FreeChests.Length, Is.EqualTo(GemPoolSingleton.ChestCapacity));
         }
         [Test]
         public void ChestChoicesPreserveQueuedLevelUpsAndInventoryPause()
@@ -622,8 +622,8 @@ namespace GameHolder.PureDots.Tests
             Assert.That(m_Em.IsComponentEnabled<EnemyActiveTag>(target), Is.False);
             Tick(.15f);
             Assert.That(Snapshot.PlayerProjectiles, Is.Zero);
-            Assert.That(m_Em.CreateEntityQuery(typeof(PlayerProjectilePoolSingleton)).GetSingleton<PlayerProjectilePoolSingleton>().InactiveProjectiles.Count,
-                Is.EqualTo(SimulationConstants.MaxProjectiles));
+            Assert.That(m_Em.CreateEntityQuery(typeof(PlayerProjectilePoolSingleton)).GetSingleton<PlayerProjectilePoolSingleton>().InactiveProjectiles.Length,
+                Is.EqualTo(SimulationConstants.DefaultMaxProjectiles));
         }
         [Test]
         public void LaserPiercesTargetsWithinRangeAndWidthOncePerPulse()
@@ -645,7 +645,7 @@ namespace GameHolder.PureDots.Tests
         [Test]
         public void OverlappingExplosionsResolveTheFullEnemyPoolWithoutGrowingPerHitEvents()
         {
-            for (int i = 0; i < SimulationConstants.MaxEnemies; i++)
+            for (int i = 0; i < SimulationConstants.DefaultMaxEnemies; i++)
                 m_Em.SetComponentData(Enemy(new float2(0, 10)), new CurrentHealth { Value = 1000000 });
             for (int i = 0; i < 120; i++)
             {
@@ -657,7 +657,7 @@ namespace GameHolder.PureDots.Tests
             var enemies = m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().AllEnemies;
             for (int i = 0; i < enemies.Length; i++)
                 Assert.That(m_Em.GetComponentData<CurrentHealth>(enemies[i]).Value, Is.EqualTo(1000000 - 120 * 25));
-            Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(SimulationConstants.MaxEnemies));
+            Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(SimulationConstants.DefaultMaxEnemies));
         }
         [Test]
         public void LaserRenderingUsesBeamDirectionLengthAndResetsMaterialOnPoolReuse()
@@ -1060,8 +1060,8 @@ namespace GameHolder.PureDots.Tests
             Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
             Assert.That(Snapshot.ActiveEnemies + Snapshot.PlayerProjectiles + Snapshot.EnemyProjectiles + Snapshot.ActiveGems, Is.Zero);
             Assert.That(Snapshot.Kills, Is.Zero); Assert.That(Snapshot.TotalExperience, Is.Zero);
-            Assert.That(m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().InactiveEnemies.Count, Is.EqualTo(SimulationConstants.MaxEnemies));
-            Assert.That(m_Em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>().FreeGems.Count, Is.EqualTo(1024));
+            Assert.That(m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().InactiveEnemies.Length, Is.EqualTo(SimulationConstants.DefaultMaxEnemies));
+            Assert.That(m_Em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>().FreeGems.Length, Is.EqualTo(1024));
             var wave = m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave);
             Assert.That(wave.BatchSize, Is.EqualTo(35)); Assert.That(wave.RandomSeed, Is.EqualTo(777123));
             Assert.That(wave.Timer, Is.LessThan(.02f));
@@ -1079,7 +1079,7 @@ namespace GameHolder.PureDots.Tests
         {
             Command(SimulationCommandKind.SpawnExtra, 50000); Tick();
             Command(SimulationCommandKind.KillAll); Tick();
-            Assert.That(Snapshot.Kills, Is.EqualTo(SimulationConstants.MaxEnemies)); Assert.That(Snapshot.ActiveEnemies, Is.Zero);
+            Assert.That(Snapshot.Kills, Is.EqualTo(SimulationConstants.DefaultMaxEnemies)); Assert.That(Snapshot.ActiveEnemies, Is.Zero);
             var bridge = m_Em.CreateEntityQuery(typeof(SimulationBridgeQueuesSingleton)).GetSingleton<SimulationBridgeQueuesSingleton>();
             Assert.That(bridge.DeathEventQueue.Count, Is.LessThanOrEqualTo(SimulationConstants.CosmeticQueueCapacity));
             Assert.That(bridge.GemCollectEventQueue.Count, Is.LessThanOrEqualTo(SimulationConstants.CosmeticQueueCapacity));
@@ -1604,6 +1604,9 @@ namespace GameHolder.PureDots.Tests
             m_Access.State = SystemAPI.GetSingletonEntity<SimulationRunState>();
             m_Access.Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
             m_Access.EnemyPool = SystemAPI.GetSingleton<EnemyPoolSingleton>();
+            m_Access.PlayerPool = SystemAPI.GetSingleton<PlayerProjectilePoolSingleton>();
+            m_Access.EnemyProjectilePool = SystemAPI.GetSingleton<EnemyProjectilePoolSingleton>();
+            m_Access.GemPool = SystemAPI.GetSingleton<GemPoolSingleton>();
             var spatial = SystemAPI.GetSingleton<EnemySpatialGridSingleton>();
             m_Access.Grid = spatial.Grid; m_Access.CrowdCells = spatial.CrowdCells;
             state.Dependency = new RebuildSpatialGridJob { A = m_Access }.Schedule(state.Dependency);

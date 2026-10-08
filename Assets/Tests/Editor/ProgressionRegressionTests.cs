@@ -46,7 +46,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(Snapshot.TotalExperience, Is.EqualTo(10000UL * int.MaxValue));
             Assert.That(Snapshot.Player.Experience, Is.GreaterThan(uint.MaxValue));
             Assert.That(Snapshot.Player.Level, Is.GreaterThan(3));
-            Assert.That(pool.FreeGems.Count, Is.EqualTo(1024));
+            Assert.That(pool.FreeGems.Length, Is.EqualTo(1024));
         }
 
         [Test]
@@ -102,9 +102,9 @@ namespace GameHolder.PureDots.Tests
             TestContext.WriteLine($"10000 enemies + 10000 standard projectiles: one simulation tick {timer.Elapsed.TotalMilliseconds:F3} ms");
             Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(10000));
             Assert.That(Snapshot.PlayerProjectiles + Snapshot.EnemyProjectiles, Is.EqualTo(10000));
-            Assert.That(m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().InactiveEnemies.Count, Is.Zero);
-            Assert.That(m_Em.CreateEntityQuery(typeof(PlayerProjectilePoolSingleton)).GetSingleton<PlayerProjectilePoolSingleton>().InactiveProjectiles.Count, Is.Zero);
-            Assert.That(m_Em.CreateEntityQuery(typeof(EnemyProjectilePoolSingleton)).GetSingleton<EnemyProjectilePoolSingleton>().InactiveProjectiles.Count, Is.Zero);
+            Assert.That(m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().InactiveEnemies.Length, Is.Zero);
+            Assert.That(m_Em.CreateEntityQuery(typeof(PlayerProjectilePoolSingleton)).GetSingleton<PlayerProjectilePoolSingleton>().InactiveProjectiles.Length, Is.Zero);
+            Assert.That(m_Em.CreateEntityQuery(typeof(EnemyProjectilePoolSingleton)).GetSingleton<EnemyProjectilePoolSingleton>().InactiveProjectiles.Length, Is.Zero);
         }
     }
 }

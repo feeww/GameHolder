@@ -86,7 +86,7 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(tint.w, Is.EqualTo(catalog.Value.Configs[(int)type.Value].Tint.w));
                 Command(SimulationCommandKind.KillAll); Tick(0);
                 Assert.That(m_Em.GetComponentData<TypeId>(enemy).IsElite, Is.Zero);
-                pool.InactiveEnemies.Clear(); pool.InactiveEnemies.Enqueue(enemy);
+                while (pool.InactiveEnemies.TryDequeue(out _)) { } pool.InactiveEnemies.Enqueue(enemy);
                 catalog.Value.Elites = TestElites(0);
                 Command(SimulationCommandKind.SpawnExtra, 1); Tick(0);
                 type = m_Em.GetComponentData<TypeId>(enemy);
@@ -135,7 +135,7 @@ namespace GameHolder.PureDots.Tests
                 ulong experience = 0;
                 for (int i = 0; i < gems.AllGems.Length; i++) if (gems.AllGems[i].IsActive != 0) experience += gems.AllGems[i].ExperienceValue;
                 Assert.That(experience, Is.EqualTo((uint)math.round(config.ExperienceValue * 2.5f)));
-                Assert.That(gems.FreeChests.Count, Is.EqualTo(GemPoolSingleton.ChestCapacity - 1));
+                Assert.That(gems.FreeChests.Length, Is.EqualTo(GemPoolSingleton.ChestCapacity - 1));
                 catalog.Value.Configs[0].ExperienceValue = uint.MaxValue;
                 Assert.That(catalog.Value.GetConfig(new TypeId { IsElite = 1 }).ExperienceValue, Is.EqualTo(uint.MaxValue));
                 catalog.Value.Elites.ExperienceMultiplier = 0;

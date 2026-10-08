@@ -18,6 +18,18 @@ namespace GameHolder.PureDots
         public CharacterWeaponDefinition StartingWeaponAsset => m_StartingWeaponAsset;
         public EnemyDefinition[] EnemyTypes => m_EnemyTypes;
 
+        [Header("Pool Limits (applied on Play)")]
+        [Tooltip("Maximum simultaneously active enemies. Preallocated on Play; restart keeps this capacity.")]
+        [Min(1)] [SerializeField] private int m_MaxEnemies = SimulationConstants.DefaultMaxEnemies;
+        [Tooltip("Maximum visible XP gems. When full, new XP merges into existing gems.")]
+        [Min(1)] [SerializeField] private int m_MaxGems = SimulationConstants.DefaultMaxGems;
+        [Tooltip("Maximum active player projectiles, including lasers and explosion visuals. Shots stop when the pool is full.")]
+        [Min(1)] [SerializeField] private int m_MaxPlayerProjectiles = SimulationConstants.DefaultMaxProjectiles;
+        [Tooltip("Maximum active enemy projectiles, including laser warnings and explosion visuals. Attacks wait when the pool is full.")]
+        [Min(1)] [SerializeField] private int m_MaxEnemyProjectiles = SimulationConstants.DefaultMaxProjectiles;
+        public PoolLimits Pools => new PoolLimits { MaxEnemies = m_MaxEnemies, MaxGems = m_MaxGems,
+            MaxPlayerProjectiles = m_MaxPlayerProjectiles, MaxEnemyProjectiles = m_MaxEnemyProjectiles };
+
         [Header("Enemy Spawning (applied on Play)")]
         [Tooltip("Enemy batches and difficulty scaling; applied on Play.")]
         [SerializeField] private EnemySpawnSettings m_EnemySpawning = new EnemySpawnSettings();
@@ -179,6 +191,7 @@ namespace GameHolder.PureDots
 
         public bool TryValidateConfiguration(out string error)
         {
+            if (!Pools.IsValid) { error = "Pool limits must be positive and fit simulation buffer capacities."; return false; }
             if (m_EnemySpawning == null) { error = "Configure Enemy Spawning."; return false; }
             if (!m_EnemySpawning.TryValidate(out error)) return false;
             var elites = Elites;

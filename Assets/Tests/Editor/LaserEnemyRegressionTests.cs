@@ -75,7 +75,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(m_Em.IsComponentEnabled<ProjectileActiveTag>(beam), Is.False);
             Assert.That(Snapshot.EnemyProjectiles, Is.Zero);
             var pool = m_Em.CreateEntityQuery(typeof(EnemyProjectilePoolSingleton)).GetSingleton<EnemyProjectilePoolSingleton>();
-            Assert.That(pool.InactiveProjectiles.Count, Is.EqualTo(SimulationConstants.MaxProjectiles));
+            Assert.That(pool.InactiveProjectiles.Length, Is.EqualTo(SimulationConstants.DefaultMaxProjectiles));
             m_Em.SetComponentData(enemy, LocalTransform.FromPosition(new float3(5, 0, 0)));
             Tick(0);
             Assert.That(m_Em.GetComponentData<EnemyRangedCooldown>(enemy).ChargeTimer, Is.EqualTo(1));
@@ -125,7 +125,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(m_Em.IsComponentEnabled<LaserBeam>(beam), Is.False);
             Assert.That(Snapshot.EnemyProjectiles, Is.Zero);
             var pool = m_Em.CreateEntityQuery(typeof(EnemyProjectilePoolSingleton)).GetSingleton<EnemyProjectilePoolSingleton>();
-            Assert.That(pool.InactiveProjectiles.Count, Is.EqualTo(SimulationConstants.MaxProjectiles));
+            Assert.That(pool.InactiveProjectiles.Length, Is.EqualTo(SimulationConstants.DefaultMaxProjectiles));
         }
     }
 }

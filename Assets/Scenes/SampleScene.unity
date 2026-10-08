@@ -392,11 +392,11 @@ MonoBehaviour:
   m_StartingCharacter: {fileID: 11400000, guid: 4ba4445e7cf2fbd478d5f96bbd682691, type: 2}
   m_StartingWeaponAsset: {fileID: 0}
   m_EnemyTypes:
-  - {fileID: 11400000, guid: a6ba163becab478790c11bd2b081250a, type: 2}
-  - {fileID: 11400000, guid: 23188b466d3743dcba02b9aa8bbfbb7b, type: 2}
-  - {fileID: 11400000, guid: 77b4a281c9464fc58ef1dbf88be402f3, type: 2}
-  - {fileID: 11400000, guid: 7e45f64d791a4da2a5d2e3e92f0cb14f, type: 2}
   - {fileID: 11400000, guid: 1cc1d094a03b3304da6dc8391b38f829, type: 2}
+  m_MaxEnemies: 10000
+  m_MaxGems: 1024
+  m_MaxPlayerProjectiles: 5000
+  m_MaxEnemyProjectiles: 5000
   m_EnemySpawning:
     SpawnInterval: 0.5
     BatchSize: 35

@@ -20,7 +20,7 @@ namespace GameHolder.PureDots
                 switch (command.Kind)
                 {
                     case SimulationCommandKind.SpawnExtra:
-                        run.ExtraSpawns = math.min(SimulationConstants.MaxEnemies, run.ExtraSpawns + math.max(0, command.Value)); break;
+                        run.ExtraSpawns = (int)math.min(A.EnemyPool.AllEnemies.Length, (double)run.ExtraSpawns + math.max(0, command.Value)); break;
                     case SimulationCommandKind.GodMode:
                         run.GodMode = (byte)(command.Value != 0 ? 1 : 0);
                         if (run.GodMode != 0)
@@ -149,7 +149,7 @@ namespace GameHolder.PureDots
             A.Grid.Clear(); A.CrowdCells.Clear(); A.Damage.Clear(); A.PlayerDamage.Clear(); A.Deactivations.Clear(); A.GemSpawns.Clear();
             A.Bridge.DeathEventQueue.Clear(); A.Bridge.HitReactionEventQueue.Clear();
             A.Bridge.GemCollectEventQueue.Clear(); A.Bridge.RebaseEventQueue.Clear();
-            A.EnemyPool.InactiveEnemies.Clear();
+            while (A.EnemyPool.InactiveEnemies.TryDequeue(out _)) { }
             for (int i = 0; i < A.EnemyPool.AllEnemies.Length; i++)
             {
                 Entity e = A.EnemyPool.AllEnemies[i];
@@ -161,7 +161,7 @@ namespace GameHolder.PureDots
             }
             ResetProjectiles(A.PlayerPool.AllProjectiles, A.PlayerPool.InactiveProjectiles);
             ResetProjectiles(A.EnemyProjectilePool.AllProjectiles, A.EnemyProjectilePool.InactiveProjectiles);
-            A.GemPool.FreeGems.Clear();
+            while (A.GemPool.FreeGems.TryDequeue(out _)) { }
             for (int i = 0; i < A.GemPool.AllGems.Length; i++)
             {
                 var record = A.GemPool.AllGems[i];
@@ -172,7 +172,7 @@ namespace GameHolder.PureDots
                 A.Transforms[record.Entity] = LocalTransform.Identity;
                 A.GemPool.FreeGems.Enqueue(record.Entity);
             }
-            A.GemPool.FreeChests.Clear();
+            while (A.GemPool.FreeChests.TryDequeue(out _)) { }
             for (int i = 0; i < A.GemPool.AllChests.Length; i++)
             {
                 var chest = A.GemPool.AllChests[i];
@@ -184,9 +184,9 @@ namespace GameHolder.PureDots
             }
         }
         private void ResetProjectiles(Unity.Collections.LowLevel.Unsafe.UnsafeList<Entity> entities,
-            Unity.Collections.UnsafeQueue<Entity> pool)
+            Unity.Collections.NativeRingQueue<Entity> pool)
         {
-            pool.Clear();
+            while (pool.TryDequeue(out _)) { }
             for (int i = 0; i < entities.Length; i++)
             {
                 Entity e = entities[i];

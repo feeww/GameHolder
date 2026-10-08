@@ -3,9 +3,11 @@ using System.Linq;
 using System.Reflection;
 using GameHolder.PureDots.Editor;
 using NUnit.Framework;
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Core;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
@@ -15,6 +17,86 @@ namespace GameHolder.PureDots.Tests
 {
     public class AuthoringArchitectureTests
     {
+        [TestCase("m_MaxEnemies", 0)] [TestCase("m_MaxEnemies", int.MaxValue)]
+        [TestCase("m_MaxGems", -1)] [TestCase("m_MaxPlayerProjectiles", 0)]
+        [TestCase("m_MaxPlayerProjectiles", int.MaxValue)] [TestCase("m_MaxEnemyProjectiles", int.MaxValue)]
+        public void InvalidPoolLimitsAreRejectedBeforeAllocation(string field, int value)
+        {
+            var go = new GameObject("Pool settings validation"); go.SetActive(false);
+            try
+            {
+                var settings = go.AddComponent<GamePresentationBootstrap>();
+                var serialized = new SerializedObject(settings);
+                serialized.FindProperty(field).intValue = value; serialized.ApplyModifiedPropertiesWithoutUndo();
+                Assert.That(settings.TryValidateConfiguration(out string error), Is.False);
+                Assert.That(error, Does.Contain("Pool limits"));
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void PoolFreeListsShareJobStateAndReuseWithoutNativeAllocations()
+        {
+            using var helper = new AllocatorHelper<PoolAllocationCounter>(Allocator.Persistent);
+            var allocator = helper.Allocator.Handle;
+            var enemies = new EnemyPoolSingleton { InactiveEnemies = new NativeRingQueue<Entity>(7, allocator) };
+            var player = new PlayerProjectilePoolSingleton { InactiveProjectiles = new NativeRingQueue<Entity>(2, allocator) };
+            var enemy = new EnemyProjectilePoolSingleton { InactiveProjectiles = new NativeRingQueue<Entity>(5, allocator) };
+            var gems = new GemPoolSingleton { FreeGems = new NativeRingQueue<Entity>(3, allocator),
+                FreeChests = new NativeRingQueue<Entity>(GemPoolSingleton.ChestCapacity, allocator) };
+            var queues = new[] { enemies.InactiveEnemies, player.InactiveProjectiles, enemy.InactiveProjectiles, gems.FreeGems, gems.FreeChests };
+            int allocations = helper.Allocator.Allocations;
+            try
+            {
+                foreach (var queue in queues)
+                {
+                    new ReusePoolJob { Pool = queue }.Schedule().Complete();
+                    Assert.That(queue.Length, Is.EqualTo(queue.Capacity));
+                    Assert.That(queue.TryEnqueue(Entity.Null), Is.False);
+                    for (int i = 0; i < queue.Capacity; i++) Assert.That(queue.Dequeue().Index, Is.EqualTo(i + 1));
+                    Assert.That(queue.TryDequeue(out _), Is.False);
+                }
+                Assert.That(helper.Allocator.Allocations, Is.EqualTo(allocations));
+            }
+            finally { foreach (var queue in queues) queue.Dispose(); helper.Allocator.Dispose(); }
+        }
+
+        [BurstCompile]
+        private struct ReusePoolJob : IJob
+        {
+            public NativeRingQueue<Entity> Pool;
+            public void Execute()
+            {
+                for (int cycle = 0; cycle < 64; cycle++)
+                {
+                    while (Pool.TryDequeue(out _)) { }
+                    for (int i = 0; i < Pool.Capacity; i++) Pool.Enqueue(new Entity { Index = i + 1, Version = 1 });
+                }
+            }
+        }
+
+        private struct PoolAllocationCounter : AllocatorManager.IAllocator
+        {
+            public AllocatorManager.AllocatorHandle Handle { get; set; }
+            public Allocator ToAllocator => Handle.ToAllocator;
+            public bool IsCustomAllocator => Handle.IsCustomAllocator;
+            public AllocatorManager.TryFunction Function => Allocate;
+            public int Allocations;
+            public int Try(ref AllocatorManager.Block block)
+            {
+                bool allocating = block.Range.Pointer == IntPtr.Zero;
+                var original = block.Range.Allocator; block.Range.Allocator = Allocator.Persistent;
+                int error = AllocatorManager.Try(ref block); block.Range.Allocator = original;
+                if (error == 0 && allocating) Allocations++;
+                return error;
+            }
+            [BurstCompile(CompileSynchronously = true)]
+            [AOT.MonoPInvokeCallback(typeof(AllocatorManager.TryFunction))]
+            private static unsafe int Allocate(IntPtr state, ref AllocatorManager.Block block)
+                => ((PoolAllocationCounter*)state)->Try(ref block);
+            public void Dispose() => Handle.Dispose();
+        }
+
         [TestCase(float.NaN)]
         [TestCase(float.PositiveInfinity)]
         [TestCase(float.NegativeInfinity)]
@@ -148,12 +230,17 @@ namespace GameHolder.PureDots.Tests
             }
         }
 
-        [Test]
-        public void HeadlessBootstrapCreatesNativePrefabsAndRunsWithoutRenderer()
+        [TestCase(0)] [TestCase(1)] [TestCase(2)]
+        public void HeadlessBootstrapCreatesNativePrefabsAndRunsWithoutRenderer(int poolCase)
         {
             using var world = new World("Native startup without presentation");
             var bootstrap = world.GetOrCreateSystem<SimulationBootstrapSystem>();
             var em = world.EntityManager;
+            var limits = poolCase == 1
+                ? new PoolLimits { MaxEnemies = 7, MaxGems = 3, MaxPlayerProjectiles = 2, MaxEnemyProjectiles = 5 }
+                : PoolLimits.Defaults;
+            if (poolCase == 2) { limits.MaxEnemies += 7; limits.MaxGems += 3; limits.MaxPlayerProjectiles += 2; limits.MaxEnemyProjectiles += 5; }
+            if (poolCase != 0) em.AddComponentData(em.CreateEntity(), limits);
             var player = new StartingPlayerConfig { Stats = new PlayerStats { MaxHealth = 100, CurrentHealth = 100,
                 MoveSpeed = 5, CollisionRadius = .4f, MagnetRadius = 4, Level = 1 },
                 Weapon = new PlayerWeapon { Interval = 1, Damage = 5, Range = 12, Radius = .1f, Speed = 12,
@@ -177,7 +264,14 @@ namespace GameHolder.PureDots.Tests
             bootstrap.Update(world.Unmanaged);
             var prefabs = em.CreateEntityQuery(typeof(PureDotsPrefabsSingleton)).GetSingleton<PureDotsPrefabsSingleton>();
             Assert.That(em.HasComponent<Unity.Rendering.MaterialMeshInfo>(prefabs.PlayerPrefab), Is.False);
-            Assert.That(em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().AllEnemies.Length, Is.EqualTo(SimulationConstants.MaxEnemies));
+            var enemies = em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>();
+            var gems = em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>();
+            var playerProjectiles = em.CreateEntityQuery(typeof(PlayerProjectilePoolSingleton)).GetSingleton<PlayerProjectilePoolSingleton>();
+            var enemyProjectiles = em.CreateEntityQuery(typeof(EnemyProjectilePoolSingleton)).GetSingleton<EnemyProjectilePoolSingleton>();
+            Assert.That(enemies.AllEnemies.Length, Is.EqualTo(limits.MaxEnemies));
+            Assert.That(gems.AllGems.Length, Is.EqualTo(limits.MaxGems));
+            Assert.That(playerProjectiles.AllProjectiles.Length, Is.EqualTo(limits.MaxPlayerProjectiles));
+            Assert.That(enemyProjectiles.AllProjectiles.Length, Is.EqualTo(limits.MaxEnemyProjectiles));
             var input = em.CreateEntityQuery(typeof(SimulationInput)).GetSingletonEntity();
             em.SetComponentData(input, new SimulationInput { Movement = new float2(1, 0) });
             world.SetTime(new TimeData(1.0 / 60, 1f / 60));
@@ -186,6 +280,63 @@ namespace GameHolder.PureDots.Tests
             Assert.That(em.CreateEntityQuery(typeof(SimulationSnapshot)).GetSingleton<SimulationSnapshot>().PlayerPosition.x, Is.GreaterThan(0));
             var references = typeof(SimulationBootstrapSystem).Assembly.GetReferencedAssemblies().Select(assembly => assembly.Name);
             Assert.That(references, Does.Not.Contain("GameHolder.PureDots.Presentation").And.Not.Contain("Unity.Entities.Graphics"));
+            if (poolCase == 0) return;
+            var pipeline = world.GetOrCreateSystem<SimulationPipelineSystem>();
+            var commands = em.CreateEntityQuery(typeof(SimulationCommandQueue)).GetSingleton<SimulationCommandQueue>().Commands;
+            var runEntity = em.CreateEntityQuery(typeof(SimulationRunState)).GetSingletonEntity();
+            em.SetComponentData(input, default(SimulationInput));
+            world.SetTime(new TimeData(1, 0));
+            for (int cycle = 0; cycle < 3; cycle++)
+            {
+                commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.SpawnExtra, Value = int.MaxValue });
+                if (poolCase == 1)
+                {
+                    var run = em.GetComponentData<SimulationRunState>(runEntity); run.AttackTimer = 1;
+                    run.EnemyProjectiles = limits.MaxEnemyProjectiles; em.SetComponentData(runEntity, run);
+                    var weapon = player.Weapon; weapon.Count = limits.MaxPlayerProjectiles + 1; weapon.Range = 64;
+                    em.SetComponentData(run.Player, weapon);
+                    for (int i = 0; i < limits.MaxEnemyProjectiles; i++)
+                    {
+                        Assert.That(enemyProjectiles.InactiveProjectiles.TryDequeue(out Entity projectile), Is.True);
+                        em.SetComponentData(projectile, Unity.Transforms.LocalTransform.FromPosition(-100, -100, 0));
+                        em.SetComponentData(projectile, new ProjectileData { RemainingLifetime = 1, Radius = .1f });
+                        em.SetComponentEnabled<ProjectileActiveTag>(projectile, true);
+                    }
+                    var drops = em.CreateEntityQuery(typeof(GemSpawnQueueSingleton)).GetSingleton<GemSpawnQueueSingleton>().SpawnQueue;
+                    for (int i = 0; i < limits.MaxGems + 2; i++) drops.Enqueue(new GemSpawnRequest { Position = new float2(40), ExperienceValue = 1 });
+                }
+                pipeline.Update(world.Unmanaged);
+                em.GetComponentData<SimulationJobFence>(runEntity).Handle.Complete();
+                Assert.That(em.GetComponentData<SimulationSnapshot>(runEntity).ActiveEnemies, Is.EqualTo(limits.MaxEnemies));
+                Assert.That(enemies.InactiveEnemies.Length, Is.Zero);
+                if (poolCase == 1)
+                {
+                    var snapshot = em.GetComponentData<SimulationSnapshot>(runEntity);
+                    Assert.That(snapshot.PlayerProjectiles, Is.EqualTo(limits.MaxPlayerProjectiles));
+                    Assert.That(snapshot.EnemyProjectiles, Is.EqualTo(limits.MaxEnemyProjectiles));
+                    Assert.That(snapshot.ActiveGems, Is.EqualTo(limits.MaxGems));
+                    ulong xp = 0; foreach (var gem in gems.AllGems) xp += gem.ExperienceValue;
+                    Assert.That(xp, Is.EqualTo(limits.MaxGems + 2));
+                    Assert.That(playerProjectiles.InactiveProjectiles.Length, Is.Zero);
+                    Assert.That(enemyProjectiles.InactiveProjectiles.Length, Is.Zero);
+                    foreach (Entity projectile in playerProjectiles.AllProjectiles) em.SetComponentData(projectile, default(ProjectileData));
+                    foreach (Entity projectile in enemyProjectiles.AllProjectiles) em.SetComponentData(projectile, default(ProjectileData));
+                    commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.KillAll });
+                    pipeline.Update(world.Unmanaged);
+                    em.GetComponentData<SimulationJobFence>(runEntity).Handle.Complete();
+                    Assert.That(enemies.InactiveEnemies.Length, Is.EqualTo(limits.MaxEnemies));
+                    Assert.That(playerProjectiles.InactiveProjectiles.Length, Is.EqualTo(limits.MaxPlayerProjectiles));
+                    Assert.That(enemyProjectiles.InactiveProjectiles.Length, Is.EqualTo(limits.MaxEnemyProjectiles));
+                }
+                commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Restart });
+                pipeline.Update(world.Unmanaged);
+                em.GetComponentData<SimulationJobFence>(runEntity).Handle.Complete();
+                Assert.That(enemies.InactiveEnemies.Length, Is.EqualTo(limits.MaxEnemies));
+                Assert.That(playerProjectiles.InactiveProjectiles.Length, Is.EqualTo(limits.MaxPlayerProjectiles));
+                Assert.That(enemyProjectiles.InactiveProjectiles.Length, Is.EqualTo(limits.MaxEnemyProjectiles));
+                Assert.That(gems.FreeGems.Length, Is.EqualTo(limits.MaxGems));
+                Assert.That(gems.FreeChests.Length, Is.EqualTo(GemPoolSingleton.ChestCapacity));
+            }
         }
     }
 }

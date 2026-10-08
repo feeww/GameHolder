@@ -22,19 +22,19 @@ namespace GameHolder.PureDots
             run.ExtraSpawns = 0;
             if (wave.SpawnInterval > 0 && wave.Timer >= wave.SpawnInterval)
             {
-                int batches = (int)math.min(SimulationConstants.MaxEnemies, math.floor((double)wave.Timer / wave.SpawnInterval));
+                int batches = (int)math.min(A.EnemyPool.AllEnemies.Length, math.floor((double)wave.Timer / wave.SpawnInterval));
                 wave.Timer %= wave.SpawnInterval;
                 float scale = wave.SpawnRateScalingInterval > 0
                     ? math.pow(math.max(1, wave.SpawnRateMultiplier), (float)math.floor(wave.ElapsedSeconds / wave.SpawnRateScalingInterval)) : 1;
-                int batchSize = (int)math.min(SimulationConstants.MaxEnemies, math.ceil((double)wave.BatchSize * scale));
-                count = math.min(SimulationConstants.MaxEnemies, count + batches * batchSize);
+                int batchSize = (int)math.min(A.EnemyPool.AllEnemies.Length, math.ceil((double)wave.BatchSize * scale));
+                count = (int)math.min(A.EnemyPool.AllEnemies.Length, count + (double)batches * batchSize);
             }
             if (wave.LargeSpawnInterval > 0)
             {
                 wave.LargeSpawnTimer += Dt;
-                int batches = (int)math.min(SimulationConstants.MaxEnemies, math.floor((double)wave.LargeSpawnTimer / wave.LargeSpawnInterval));
+                int batches = (int)math.min(A.EnemyPool.AllEnemies.Length, math.floor((double)wave.LargeSpawnTimer / wave.LargeSpawnInterval));
                 wave.LargeSpawnTimer %= wave.LargeSpawnInterval;
-                count = math.min(SimulationConstants.MaxEnemies, count + batches * wave.LargeSpawnCount);
+                count = (int)math.min(A.EnemyPool.AllEnemies.Length, count + (double)batches * wave.LargeSpawnCount);
             }
             if (count <= 0) { A.Waves[A.Wave] = wave; A.Run[A.State] = run; return; }
             ref var configs = ref A.Catalog.Value.Configs;
