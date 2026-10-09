@@ -22,4 +22,4 @@ MonoBehaviour:
     height: 0.9959514
   MaxHealth: 0
   PickupRadius: 0
-  HealthRegeneration: 1
+  HealthRegeneration: 0.2

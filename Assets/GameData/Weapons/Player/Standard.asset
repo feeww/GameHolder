@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: Standard
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterWeaponDefinition
   Type: 0
-  AttackInterval: 0.25
+  AttackInterval: 0.65
   Damage: 25
-  AttackRange: 18
-  ProjectileRadius: 0.35
-  ProjectileSpeed: 16
-  ProjectileLifetime: 1.8
+  AttackRange: 14
+  ProjectileRadius: 0.18
+  ProjectileSpeed: 14
+  ProjectileLifetime: 1.1
   BlastRadius: 0
   ProjectileCount: 3
-  SpreadAngle: 0.2
+  SpreadAngle: 0.18
   WeaponTexture: {fileID: 2800000, guid: fdf84fc41ad41594fbbcb04238ac1306, type: 3}
   ProjectileTexture: {fileID: 0}
   Tint: {r: 0.2, g: 0.9, b: 1, a: 1}

@@ -12,17 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dcf90a54b9281ff41834f33fe3a0c459, type: 3}
   m_Name: Laser
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyDefinition
-  MaxHealth: 70
-  MoveSpeed: 2.8
+  MaxHealth: 90
+  MoveSpeed: 1.8
   CollisionRadius: 0.45
   Mass: 2
-  ContactDamage: 15
-  ContactAttackInterval: 1
+  ContactDamage: 12
+  ContactAttackInterval: 1.2
   MeleeStoppingDistance: 0
-  ExperienceValue: 20
-  ChestDropChance: 0.01
+  ExperienceValue: 16
+  ChestDropChance: 0.003
   SpawnWeight: 0.15
-  AvailableAfterSeconds: 0
+  AvailableAfterSeconds: 360
   Ranged: 1
   Weapon: {fileID: 11400000, guid: e3f8b9e3a6cc4ef7ac8806e98b850cf7, type: 2}
   AttackRange: 7

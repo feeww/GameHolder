@@ -2,7 +2,7 @@ namespace GameHolder.PureDots
 {
     public static class ProgressionConstants
     {
-        public const uint ExpPerLevelMultiplier = 50;
+        public const uint ExpPerLevelMultiplier = 40;
         public const float OffScreenGemRecycleDistance = 35.0f;
         public const float OffScreenGemRecycleDistanceSq = OffScreenGemRecycleDistance * OffScreenGemRecycleDistance;
 

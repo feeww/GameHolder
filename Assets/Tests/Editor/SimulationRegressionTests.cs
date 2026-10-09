@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using NUnit.Framework;
 using Unity.Burst;
@@ -66,6 +67,7 @@ namespace GameHolder.PureDots.Tests
             {
                 var definition = UnityEditor.AssetDatabase.LoadAssetAtPath<EnemyDefinition>($"Assets/GameData/Enemies/{names[i]}.asset");
                 configs[i] = definition.ToConfig(threshold, startingPlayer.Stats.CollisionRadius);
+                configs[i].AvailableAfterSeconds = 0; // Combat fixtures spawn every type; appearance checks opt into delays.
                 configs[i].ChestDropChance = 0; // Individual drop checks opt in; combat checks keep their original stats.
                 threshold = configs[i].SpawnThreshold;
             }
@@ -98,7 +100,9 @@ namespace GameHolder.PureDots.Tests
             m_Em.SetComponentData(m_Input, new SimulationInput());
             Tick();
             var wave = m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave);
-            wave.SpawnInterval = 100000; m_Em.SetComponentData(m_Wave, wave);
+            wave.SpawnInterval = 100000; wave.LargeSpawnInterval = 0;
+            wave.SpawnRateScalingInterval = 0; wave.StatScalingInterval = 0;
+            m_Em.SetComponentData(m_Wave, wave);
             m_Em.SetComponentData(m_Player, new PlayerInvulnerability());
         }
         [OneTimeTearDown]
@@ -155,16 +159,16 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(Snapshot.PendingChests, Is.Zero); Assert.That(Snapshot.Rewards.Active, Is.Zero);
                 Assert.That(Snapshot.Inventory.Items.Length, Is.EqualTo(3));
                 Assert.That(Snapshot.Inventory.Items[0].Quantity, Is.EqualTo(2));
-                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth + 50));
-                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(60));
+                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth + 20));
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(30));
                 Assert.That(Snapshot.Player.MagnetRadius, Is.EqualTo(DefaultPlayer.Stats.MagnetRadius + .5f));
-                Assert.That(Snapshot.Player.HealthRegeneration, Is.EqualTo(1));
+                Assert.That(Snapshot.Player.HealthRegeneration, Is.EqualTo(.2f));
                 var run = m_Em.GetComponentData<SimulationRunState>(m_Run);
                 run.Rewards = new RewardSelection { Active = 1, Pending = 1, PromptId = 9 };
                 run.Rewards.Choices.Add(new RewardChoice { Target = 0, Stat = UpgradeStat.MaxHealth, Bonus = .1f });
                 m_Em.SetComponentData(m_Run, run);
                 m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.SelectReward, Value = 0, PromptId = 9, Generation = run.Generation }); Tick(0);
-                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth * 1.1f + 50));
+                Assert.That(Snapshot.Player.MaxHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth * 1.1f + 20));
                 Assert.That(Snapshot.Player.MagnetRadius, Is.EqualTo(DefaultPlayer.Stats.MagnetRadius + .5f));
                 Entity enemy = Enemy(new float2(20, 0)); Entity projectile = Projectile(new float2(10, 10), new float2(1, 0), true);
                 var enemyPosition = m_Em.GetComponentData<LocalTransform>(enemy).Position;
@@ -183,7 +187,7 @@ namespace GameHolder.PureDots.Tests
                 m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Generation = Snapshot.Generation - 1 }); Tick(1);
                 Assert.That(Snapshot.InventoryOpen, Is.EqualTo(1));
                 m_Commands.Enqueue(new SimulationCommand { Kind = SimulationCommandKind.Inventory, Generation = Snapshot.Generation }); Tick(1);
-                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(health + 1)); Assert.That(Snapshot.PlayerPosition.x, Is.GreaterThan(0));
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(health + .2f).Within(.0001f)); Assert.That(Snapshot.PlayerPosition.x, Is.GreaterThan(0));
                 m_Em.SetComponentData(m_Player, new PlayerInvulnerability { Timer = 1000 });
                 stats = Snapshot.Player; stats.CurrentHealth = stats.MaxHealth - .1f; m_Em.SetComponentData(m_Player, stats); Tick(1);
                 Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(stats.MaxHealth));
@@ -460,7 +464,7 @@ namespace GameHolder.PureDots.Tests
         [Test]
         public void OverlappingTargetProducesFiniteProjectiles()
         {
-            Enemy(float2.zero); Command(SimulationCommandKind.AutoAttack, 1); Tick(.25f);
+            Enemy(float2.zero); Command(SimulationCommandKind.AutoAttack, 1); Tick(DefaultPlayer.Weapon.Interval);
             using var projectiles = m_Em.CreateEntityQuery(typeof(ProjectileActiveTag), typeof(PlayerProjectileTag)).ToEntityArray(Allocator.Temp);
             Assert.That(projectiles.Length, Is.EqualTo(3));
             foreach (var e in projectiles) Assert.That(math.all(math.isfinite(m_Em.GetComponentData<MovementVelocity>(e).Value)));
@@ -489,7 +493,7 @@ namespace GameHolder.PureDots.Tests
             Entity enemy = Enemy(new float2(0, 3));
             Entity projectile = Projectile(type == WeaponType.Laser ? new float2(-2, 2) : new float2(0, 2), float2.zero, true, .01f);
             SetExpiringWeapon(projectile, type);
-            Tick(.25f);
+            Tick(.5f);
             Assert.That(m_Em.GetComponentData<LocalTransform>(enemy).Position.y, Is.LessThan(2));
             Assert.That(m_Em.GetComponentData<CurrentHealth>(enemy).Value, Is.EqualTo(25));
         }
@@ -502,7 +506,7 @@ namespace GameHolder.PureDots.Tests
             m_Em.SetComponentData(m_Input, new SimulationInput { Movement = new float2(0, 1) });
             Entity projectile = Projectile(type == WeaponType.Laser ? new float2(-2, 0) : float2.zero, float2.zero, false, .01f);
             SetExpiringWeapon(projectile, type);
-            Tick(.2f);
+            Tick(.25f);
             Assert.That(Snapshot.PlayerPosition.y, Is.GreaterThan(0));
             Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth));
         }
@@ -533,7 +537,7 @@ namespace GameHolder.PureDots.Tests
                 if (projectile) Projectile(new float2(-1, 0), new float2(100, 0), false, .01f);
                 else Enemy(new float2(-.9f, 0), 0);
                 Tick();
-                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth - (projectile ? 25 : 20)));
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth - (projectile ? 25 : 18)));
             }
             finally { catalog.Value.Configs[1] = original; }
         }
@@ -787,6 +791,18 @@ namespace GameHolder.PureDots.Tests
                 Assert.That(settings, Is.Not.Null);
                 Assert.That(settings.TryValidateConfiguration(out string error), Is.True, error);
                 Assert.That(settings.EnemyTypes, Is.Not.Empty);
+                var wave = settings.EnemySpawning.ToConfig();
+                Assert.That(wave.SpawnInterval, Is.EqualTo(RunDefaults.Wave.SpawnInterval));
+                Assert.That(wave.BatchSize, Is.EqualTo(RunDefaults.Wave.BatchSize));
+                Assert.That(wave.SpawnRateScalingInterval, Is.EqualTo(RunDefaults.Wave.SpawnRateScalingInterval));
+                Assert.That(wave.SpawnRateMultiplier, Is.EqualTo(RunDefaults.Wave.SpawnRateMultiplier));
+                Assert.That(wave.StatScalingInterval, Is.EqualTo(RunDefaults.Wave.StatScalingInterval));
+                Assert.That(wave.StatMultipliers, Is.EqualTo(RunDefaults.Wave.StatMultipliers));
+                Assert.That(wave.LargeSpawnInterval, Is.EqualTo(RunDefaults.Wave.LargeSpawnInterval));
+                Assert.That(wave.LargeSpawnCount, Is.EqualTo(RunDefaults.Wave.LargeSpawnCount));
+                Assert.That(settings.StartingCharacter.MaxHealth, Is.InRange(100, 120));
+                Assert.That(settings.StartingCharacter.InvulnerabilityDuration, Is.GreaterThan(0));
+                Assert.That(settings.EnemyTypes.Count(enemy => enemy.AvailableAfterSeconds == 0), Is.EqualTo(1));
                 Assert.That(settings.StartingCharacter.Weapon, Is.Not.Null);
                 Assert.That(settings.StartingCharacter.Texture, Is.Not.Null);
                 foreach (var enemy in settings.EnemyTypes)
@@ -827,9 +843,10 @@ namespace GameHolder.PureDots.Tests
                 Tick(.001f);
                 Assert.That(m_Em.GetComponentData<EnemyMeleeCooldown>(enemy).CooldownTimer, Is.EqualTo(.2f));
                 Tick(.1f);
-                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth - 10));
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth - 8));
+                m_Em.SetComponentData(m_Player, default(PlayerInvulnerability)); // Isolate the enemy cooldown from player hit protection.
                 Tick(.11f);
-                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth - 20));
+                Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(Snapshot.Player.MaxHealth - 16));
             }
             finally { catalog.Value.Configs[(int)RunnerType] = original; }
         }
@@ -1042,7 +1059,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(m_Em.GetComponentData<CurrentHealth>(e).Value, Is.EqualTo(25));
             Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth));
         }
-        [TestCase(0u, 25u)] [TestCase(1u, 10u)] [TestCase(2u, 15u)] [TestCase(3u, 20u)]
+        [TestCase(0u, 12u)] [TestCase(1u, 4u)] [TestCase(2u, 8u)] [TestCase(3u, 12u)]
         public void DeathRewardsComeFromCatalog(uint type, uint expected)
         {
             Entity e = Enemy(new float2(10, 0), type);
@@ -1069,7 +1086,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>().InactiveEnemies.Length, Is.EqualTo(SimulationConstants.DefaultMaxEnemies));
             Assert.That(m_Em.CreateEntityQuery(typeof(GemPoolSingleton)).GetSingleton<GemPoolSingleton>().FreeGems.Length, Is.EqualTo(1024));
             var wave = m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave);
-            Assert.That(wave.BatchSize, Is.EqualTo(35)); Assert.That(wave.RandomSeed, Is.EqualTo(777123));
+            Assert.That(wave.BatchSize, Is.EqualTo(RunDefaults.Wave.BatchSize)); Assert.That(wave.RandomSeed, Is.EqualTo(777123));
             Assert.That(wave.Timer, Is.LessThan(.02f));
         }
         [Test]
@@ -1077,7 +1094,7 @@ namespace GameHolder.PureDots.Tests
         {
             Command(SimulationCommandKind.SpawnExtra, 100); Tick();
             Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(100));
-            Assert.That(m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).BatchSize, Is.EqualTo(35));
+            Assert.That(m_Em.GetComponentData<WaveSpawnerConfig>(m_Wave).BatchSize, Is.EqualTo(RunDefaults.Wave.BatchSize));
             Tick(); Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(100));
         }
         [Test]
@@ -1380,7 +1397,7 @@ namespace GameHolder.PureDots.Tests
             Entity tank = Enemy(new float2(5, 0), TankType);
             Entity runner = Enemy(new float2(6.2f, 0), RunnerType);
             bool passedBesideTank = false;
-            for (int i = 0; i < 180; i++)
+            for (int i = 0; i < 360; i++)
             {
                 Tick();
                 float2 tankPosition = m_Em.GetComponentData<LocalTransform>(tank).Position.xy;
@@ -1428,7 +1445,7 @@ namespace GameHolder.PureDots.Tests
         public void MeleeEnemyStillDealsDamageAtItsSurroundingDistance()
         {
             Enemy(new float2(.8f, 0)); Tick();
-            Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth - 10));
+            Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth - 8));
         }
         [Test]
         public void CrowdResistanceScalesWithDensityAndAlwaysAllowsForwardProgress()
@@ -1443,12 +1460,12 @@ namespace GameHolder.PureDots.Tests
                 float step = Snapshot.PlayerPosition.x;
                 Assert.That(step, Is.LessThanOrEqualTo(previousStep));
                 if (count <= 64) Assert.That(step, Is.LessThan(previousStep));
-                Assert.That(step, Is.GreaterThanOrEqualTo(.1f * CrowdConstants.PlayerCrowdMinimumSpeed - 1e-6f));
+                Assert.That(step, Is.GreaterThanOrEqualTo(DefaultPlayer.Stats.MoveSpeed / 60 * CrowdConstants.PlayerCrowdMinimumSpeed - 1e-6f));
                 Assert.That(Snapshot.PlayerPosition.y, Is.Zero);
                 previousStep = step;
                 m_Em.SetComponentData(m_Input, new SimulationInput { Movement = new float2(-1, 0) });
                 Tick();
-                Assert.That(step - Snapshot.PlayerPosition.x, Is.EqualTo(.1f).Within(1e-6f), "Bodies behind the player must not resist escape.");
+                Assert.That(step - Snapshot.PlayerPosition.x, Is.EqualTo(DefaultPlayer.Stats.MoveSpeed / 60).Within(1e-6f), "Bodies behind the player must not resist escape.");
             }
         }
         [TestCase(false)] [TestCase(true)]

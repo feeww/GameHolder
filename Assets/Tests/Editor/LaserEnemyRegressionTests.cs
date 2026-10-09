@@ -39,7 +39,7 @@ namespace GameHolder.PureDots.Tests
             Assert.That(m_Em.GetComponentData<LaserBeam>(beam).PendingHit, Is.EqualTo(1));
             Assert.That(m_Em.GetComponentData<EnemyRangedCooldown>(enemy).ChargeBeam, Is.EqualTo(Entity.Null));
             Tick(.01f); Tick(.01f);
-            Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth - 35));
+            Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth - 20));
             Assert.That(m_Em.GetComponentData<LocalTransform>(enemy).Position.x, Is.LessThan(5));
             Tick(.2f);
             Assert.That(m_Em.IsComponentEnabled<ProjectileActiveTag>(beam), Is.False);
@@ -91,14 +91,14 @@ namespace GameHolder.PureDots.Tests
                 m_Em.SetComponentData(enemy, LocalTransform.FromPosition(new float3(distance, 0, 0)));
                 m_Em.SetComponentData(enemy, default(SeparationCache));
                 Tick(.1f);
-                float speed = 2.8f * (distance <= 3 ? 1.15f : 1);
+                float speed = 1.8f * (distance <= 3 ? 1.15f : 1);
                 Assert.That(m_Em.GetComponentData<MovementVelocity>(enemy).Value.x, Is.EqualTo(-speed).Within(.0001f));
                 Assert.That(m_Em.GetComponentData<LocalTransform>(enemy).Position.x, Is.EqualTo(distance - speed * .1f).Within(.0001f));
                 Assert.That(Snapshot.EnemyProjectiles, Is.Zero);
             }
             m_Em.SetComponentData(enemy, LocalTransform.FromPosition(new float3(.8f, 0, 0)));
             Tick(.1f);
-            Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth - 15));
+            Assert.That(Snapshot.Player.CurrentHealth, Is.EqualTo(DefaultPlayer.Stats.MaxHealth - 12));
         }
 
         [Test]

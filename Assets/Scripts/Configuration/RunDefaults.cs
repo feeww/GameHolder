@@ -6,7 +6,10 @@ namespace GameHolder.PureDots
     {
         public static WaveSpawnerConfig Wave => new WaveSpawnerConfig
         {
-            SpawnInterval = .5f, BatchSize = 35, MinRadius = 18, MaxRadius = 40, RandomSeed = 777123u
+            SpawnInterval = 1, BatchSize = 4, MinRadius = 18, MaxRadius = 26, RandomSeed = 777123u,
+            SpawnRateScalingInterval = 60, SpawnRateMultiplier = 1.09f,
+            StatScalingInterval = 60, StatMultipliers = new float3(1.07f, 1.01f, 1.035f),
+            LargeSpawnInterval = 60, LargeSpawnCount = 40
         };
         public const float MovingSpawnVelocitySq = .01f;
         public const float MinimumSpawnRadius = 1;

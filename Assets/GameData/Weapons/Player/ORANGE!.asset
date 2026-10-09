@@ -13,16 +13,16 @@ MonoBehaviour:
   m_Name: ORANGE!
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterWeaponDefinition
   Type: 1
-  AttackInterval: 1.43
-  Damage: 3333
-  AttackRange: 15.4
-  ProjectileRadius: 2
-  ProjectileSpeed: 100
-  ProjectileLifetime: 10
-  BlastRadius: 12
-  ProjectileCount: 12
-  SpreadAngle: 1.5
+  AttackInterval: 1.1
+  Damage: 32
+  AttackRange: 12
+  ProjectileRadius: 0.25
+  ProjectileSpeed: 10
+  ProjectileLifetime: 1.5
+  BlastRadius: 2.4
+  ProjectileCount: 1
+  SpreadAngle: 0
   WeaponTexture: {fileID: 2800000, guid: 651e7e7d1978dee42894a4b7bc2d19a3, type: 3}
   ProjectileTexture: {fileID: 2800000, guid: 23133fe0234887d44aaa0279c98c0f4d, type: 3}
   Tint: {r: 0.9803922, g: 0.5019608, b: 0.4470589, a: 1}
-  UpgradableStats: 3
+  UpgradableStats: 63

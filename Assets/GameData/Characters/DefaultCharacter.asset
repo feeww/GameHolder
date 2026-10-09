@@ -12,12 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b8a5351f2b62ba459ac525bf558ea9c, type: 3}
   m_Name: DefaultCharacter
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterDefinition
-  MaxHealth: 1000
-  MoveSpeed: 6
+  MaxHealth: 100
+  MoveSpeed: 5
   CollisionRadius: 0.4
-  MagnetRadius: 4
-  InvulnerabilityDuration: 0
-  RespawnGracePeriod: 1.5
+  MagnetRadius: 3
+  InvulnerabilityDuration: 0.65
+  RespawnGracePeriod: 2
   Weapon: {fileID: 11400000, guid: 5d779eade6324bb9992451d02ed2cbb7, type: 2}
   Texture: {fileID: 2800000, guid: 78b823cbad6b4814aa4f9c4dfa50add8, type: 3}
   Tint: {r: 1, g: 1, b: 1, a: 1}

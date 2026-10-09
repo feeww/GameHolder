@@ -13,13 +13,13 @@ MonoBehaviour:
   m_Name: Explosive
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyWeaponDefinition
   Type: 1
-  AttackInterval: 0.65
-  Damage: 50
-  AttackRange: 18
-  ProjectileRadius: 0.35
-  ProjectileSpeed: 12
-  ProjectileLifetime: 2.5
-  BlastRadius: 3
+  AttackInterval: 3
+  Damage: 14
+  AttackRange: 10
+  ProjectileRadius: 0.22
+  ProjectileSpeed: 6.5
+  ProjectileLifetime: 1.7
+  BlastRadius: 1.5
   ProjectileCount: 1
   SpreadAngle: 0
   WeaponTexture: {fileID: 2800000, guid: e7e668b58855ae14b94bc6252655213e, type: 3}

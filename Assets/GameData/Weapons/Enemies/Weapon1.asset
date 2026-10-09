@@ -13,15 +13,15 @@ MonoBehaviour:
   m_Name: Weapon1
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyWeaponDefinition
   Type: 1
-  AttackInterval: 0.05
-  Damage: 1.1111111e+10
-  AttackRange: 64
-  ProjectileRadius: 2
-  ProjectileSpeed: 18.1
-  ProjectileLifetime: 10
-  BlastRadius: 12
-  ProjectileCount: 3
-  SpreadAngle: 0.2
+  AttackInterval: 3.5
+  Damage: 18
+  AttackRange: 10
+  ProjectileRadius: 0.25
+  ProjectileSpeed: 6
+  ProjectileLifetime: 2
+  BlastRadius: 1.75
+  ProjectileCount: 1
+  SpreadAngle: 0
   WeaponTexture: {fileID: 2800000, guid: ef484c55fc4157543ba4a3141805b948, type: 3}
   ProjectileTexture: {fileID: 0}
   Tint: {r: 1, g: 0.2, b: 0.2, a: 1}

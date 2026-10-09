@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Sniper
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyWeaponDefinition
   Type: 0
-  AttackInterval: 2.5
-  Damage: 25
-  AttackRange: 13
-  ProjectileRadius: 0.3
-  ProjectileSpeed: 13
-  ProjectileLifetime: 2.5
+  AttackInterval: 3.5
+  Damage: 18
+  AttackRange: 12
+  ProjectileRadius: 0.16
+  ProjectileSpeed: 9
+  ProjectileLifetime: 2
   BlastRadius: 0
   ProjectileCount: 1
   SpreadAngle: 0

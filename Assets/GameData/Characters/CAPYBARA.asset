@@ -12,13 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b8a5351f2b62ba459ac525bf558ea9c, type: 3}
   m_Name: CAPYBARA
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterDefinition
-  MaxHealth: 10000
-  MoveSpeed: 8
+  MaxHealth: 120
+  MoveSpeed: 4.5
   CollisionRadius: 0.4
-  MagnetRadius: 2
-  InvulnerabilityDuration: 0
-  RespawnGracePeriod: 1.5
+  MagnetRadius: 3.25
+  InvulnerabilityDuration: 0.65
+  RespawnGracePeriod: 2
   Weapon: {fileID: 11400000, guid: 829b464ec0ad634469064ca1ddb370df, type: 2}
   Texture: {fileID: 2800000, guid: 4e0afe49ab67b3d418d63a02878d46e5, type: 3}
   Tint: {r: 1, g: 1, b: 1, a: 1}
-  UpgradableStats: 1
+  UpgradableStats: 3

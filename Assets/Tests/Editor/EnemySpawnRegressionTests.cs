@@ -8,6 +8,30 @@ namespace GameHolder.PureDots.Tests
 {
     public partial class SimulationRegressionTests
     {
+        [TestCase(0, 4, 1f, 1f, 1f)]
+        [TestCase(5, 7, 1.403f, 1.051f, 1.188f)]
+        [TestCase(10, 10, 1.967f, 1.105f, 1.411f)]
+        [TestCase(20, 23, 3.870f, 1.220f, 1.990f)]
+        [TestCase(30, 54, 7.612f, 1.348f, 2.807f)]
+        public void BalancedRunIncreasesDensityWithoutOutrunningThePlayer(int minute, int count, float health, float speed, float damage)
+        {
+            var wave = new EnemySpawnSettings().ToConfig();
+            wave.ElapsedSeconds = minute * 60;
+            m_Em.SetComponentData(m_Wave, wave);
+            Tick(1);
+            Assert.That(Snapshot.ActiveEnemies, Is.EqualTo(count));
+            var pool = m_Em.CreateEntityQuery(typeof(EnemyPoolSingleton)).GetSingleton<EnemyPoolSingleton>();
+            var catalog = m_Em.CreateEntityQuery(typeof(EnemyConfigCatalogSingleton)).GetSingleton<EnemyConfigCatalogSingleton>().Catalog;
+            for (int i = 0; i < count; i++)
+            {
+                var type = m_Em.GetComponentData<TypeId>(pool.AllEnemies[i]);
+                Assert.That(type.StatMultipliers.x, Is.EqualTo(health).Within(.001f));
+                Assert.That(type.StatMultipliers.y, Is.EqualTo(speed).Within(.001f));
+                Assert.That(type.StatMultipliers.z, Is.EqualTo(damage).Within(.001f));
+                Assert.That(catalog.Value.GetConfig(type).MoveSpeed, Is.LessThan(DefaultPlayer.Stats.MoveSpeed));
+            }
+        }
+
         [Test]
         public void SpawnScalingCompoundsAtIntervalsAndPreservesEarlierEnemyStats()
         {

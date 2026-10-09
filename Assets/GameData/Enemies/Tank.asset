@@ -12,16 +12,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dcf90a54b9281ff41834f33fe3a0c459, type: 3}
   m_Name: Tank
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyDefinition
-  MaxHealth: 80
-  MoveSpeed: 2.4
+  MaxHealth: 120
+  MoveSpeed: 1.6
   CollisionRadius: 0.5
   Mass: 4
-  ContactDamage: 20
-  ContactAttackInterval: 1
-  MeleeStoppingDistance: 0.95
-  ExperienceValue: 25
-  ChestDropChance: 0.01
-  SpawnWeight: 0.2
+  ContactDamage: 18
+  ContactAttackInterval: 1.2
+  MeleeStoppingDistance: 0
+  ExperienceValue: 12
+  ChestDropChance: 0.002
+  SpawnWeight: 1.5
+  AvailableAfterSeconds: 60
   Ranged: 0
   Weapon: {fileID: 0}
   AttackRange: 0

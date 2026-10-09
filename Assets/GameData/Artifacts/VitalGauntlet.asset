@@ -20,6 +20,6 @@ MonoBehaviour:
     y: 0.07496013
     width: 0.75996816
     height: 0.8333334
-  MaxHealth: 25
+  MaxHealth: 10
   PickupRadius: 0
   HealthRegeneration: 0

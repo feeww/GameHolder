@@ -12,19 +12,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dcf90a54b9281ff41834f33fe3a0c459, type: 3}
   m_Name: Skirmisher
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyDefinition
-  MaxHealth: 35
-  MoveSpeed: 3.4
+  MaxHealth: 45
+  MoveSpeed: 2.3
   CollisionRadius: 0.4
   Mass: 1.5
-  ContactDamage: 12
-  ContactAttackInterval: 1
+  ContactDamage: 10
+  ContactAttackInterval: 1.2
   MeleeStoppingDistance: 0
-  ExperienceValue: 15
-  ChestDropChance: 0.01
-  SpawnWeight: 0.15
+  ExperienceValue: 8
+  ChestDropChance: 0.001
+  SpawnWeight: 0.6
+  AvailableAfterSeconds: 150
   Ranged: 1
   Weapon: {fileID: 11400000, guid: f3e2bb02c55947dfb694ed38a1b11ab5, type: 2}
-  AttackRange: 7.5
-  RetreatRange: 4.5
+  AttackRange: 6.5
+  RetreatRange: 3.5
   Texture: {fileID: 2800000, guid: 95c988cf2172c3b44baec20844a6b34e, type: 3}
   Tint: {r: 1, g: 1, b: 1, a: 1}

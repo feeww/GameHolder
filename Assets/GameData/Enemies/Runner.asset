@@ -13,15 +13,16 @@ MonoBehaviour:
   m_Name: Runner
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyDefinition
   MaxHealth: 25
-  MoveSpeed: 5.2
+  MoveSpeed: 2.8
   CollisionRadius: 0.35
   Mass: 1
-  ContactDamage: 10
+  ContactDamage: 8
   ContactAttackInterval: 1
-  MeleeStoppingDistance: 0.8
-  ExperienceValue: 10
-  ChestDropChance: 0.01
-  SpawnWeight: 0.5
+  MeleeStoppingDistance: 0
+  ExperienceValue: 4
+  ChestDropChance: 0.0005
+  SpawnWeight: 6
+  AvailableAfterSeconds: 0
   Ranged: 0
   Weapon: {fileID: 0}
   AttackRange: 0

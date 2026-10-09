@@ -128,7 +128,7 @@ namespace GameHolder.PureDots.Tests
                         (int)typeof(BatchedHudText).GetField("m_Length", flags).GetValue(label));
                 }
                 Assert.That(Label("Reward panel/Reward title"), Does.Contain("ARTIFACT CHEST"));
-                Assert.That(Label("Reward panel/Choice 1/Label"), Does.Contain("Common").And.Contain("VitalGauntlet").And.Contain("+25.0 max HP"));
+                Assert.That(Label("Reward panel/Choice 1/Label"), Does.Contain("Common").And.Contain("VitalGauntlet").And.Contain("+10.0 max HP"));
                 var icon = canvas.Find("Reward panel/Choice 1/Weapon image").GetComponent<RawImage>();
                 Assert.That(icon.texture, Is.SameAs(artifact.Texture)); Assert.That(icon.uvRect, Is.EqualTo(artifact.IconUV));
                 var pointer = new UnityEngine.EventSystems.PointerEventData(null) { button = UnityEngine.EventSystems.PointerEventData.InputButton.Left };
@@ -932,7 +932,7 @@ namespace GameHolder.PureDots.Tests
                 var label = panel.Find("Artifact viewport/Artifacts/Artifact 1/Artifact stats").GetComponent<BatchedHudText>();
                 var text = new string((char[])typeof(BatchedHudText).GetField("m_Text", flags).GetValue(label), 0,
                     (int)typeof(BatchedHudText).GetField("m_Length", flags).GetValue(label));
-                Assert.That(text, Does.Contain("VitalGauntlet x2").And.Contain("+25.0 HP each").And.Contain("+50.0 total"));
+                Assert.That(text, Does.Contain("VitalGauntlet x2").And.Contain("+10.0 HP each").And.Contain("+20.0 total"));
                 Assert.That(panel.Find("Artifact viewport/Artifacts/Artifact 1/Artifact image").GetComponent<RawImage>().texture, Is.SameAs(artifact.Texture));
                 Assert.That(panel.Find("Artifact viewport/Artifacts/Artifact 1/Artifact image").GetComponent<RawImage>().uvRect, Is.EqualTo(artifact.IconUV));
                 Assert.That(panel.Find("Artifact viewport/Artifacts/Artifact 2").gameObject.activeSelf, Is.False);

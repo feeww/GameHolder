@@ -13,12 +13,12 @@ MonoBehaviour:
   m_Name: Skirmisher
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.EnemyWeaponDefinition
   Type: 0
-  AttackInterval: 1.8
-  Damage: 12
-  AttackRange: 7.5
-  ProjectileRadius: 0.22
-  ProjectileSpeed: 8.5
-  ProjectileLifetime: 2
+  AttackInterval: 2.8
+  Damage: 10
+  AttackRange: 6.5
+  ProjectileRadius: 0.14
+  ProjectileSpeed: 6
+  ProjectileLifetime: 1.5
   BlastRadius: 0
   ProjectileCount: 1
   SpreadAngle: 0

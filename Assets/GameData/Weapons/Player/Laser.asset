@@ -13,10 +13,10 @@ MonoBehaviour:
   m_Name: Laser
   m_EditorClassIdentifier: GameHolder.PureDots.Presentation::GameHolder.PureDots.CharacterWeaponDefinition
   Type: 2
-  AttackInterval: 0.4
-  Damage: 35
-  AttackRange: 18
-  ProjectileRadius: 0.15
+  AttackInterval: 0.7
+  Damage: 16
+  AttackRange: 14
+  ProjectileRadius: 0.25
   ProjectileSpeed: 0
   ProjectileLifetime: 0.12
   BlastRadius: 0

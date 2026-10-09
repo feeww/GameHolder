@@ -402,40 +402,41 @@ MonoBehaviour:
   m_MaxPlayerProjectiles: 5000
   m_MaxEnemyProjectiles: 5000
   m_EnemySpawning:
-    SpawnInterval: 0.5
-    BatchSize: 35
+    SpawnInterval: 1
+    BatchSize: 4
     MinRadius: 18
-    MaxRadius: 40
-    SpawnRateScalingInterval: 0
-    SpawnRateMultiplier: 1
-    StatScalingInterval: 0
-    HealthMultiplier: 1
-    SpeedMultiplier: 1
-    DamageMultiplier: 1
-    EnableLargeSpawns: 0
-    LargeSpawnInterval: 30
-    LargeSpawnCount: 100
-  m_EliteSpawnProbability: 0.25
-  m_EliteHealthMultiplier: 2
-  m_EliteSpeedMultiplier: 1.25
-  m_EliteSizeMultiplier: 1.3
-  m_EliteMassMultiplier: 1.5
-  m_EliteDamageMultiplier: 2
-  m_EliteExperienceMultiplier: 2
-  m_EliteChestDropChanceMultiplier: 2
+    MaxRadius: 26
+    SpawnRateScalingInterval: 60
+    SpawnRateMultiplier: 1.09
+    StatScalingInterval: 60
+    HealthMultiplier: 1.07
+    SpeedMultiplier: 1.01
+    DamageMultiplier: 1.035
+    EnableLargeSpawns: 1
+    LargeSpawnInterval: 60
+    LargeSpawnCount: 40
+  m_EliteSpawnProbability: 0.01
+  m_EliteHealthMultiplier: 3
+  m_EliteSpeedMultiplier: 1.08
+  m_EliteSizeMultiplier: 1.25
+  m_EliteMassMultiplier: 2
+  m_EliteDamageMultiplier: 1.5
+  m_EliteExperienceMultiplier: 5
+  m_EliteChestDropChanceMultiplier: 50
   m_Rewards:
-    ChoicesPerLevel: 4
+    ChoicesPerLevel: 3
     MaxRerollsPerRun: 5
     MaxWeapons: 2
-    NewWeaponChance: 0.1
-    ExperiencePerLevel: 50
+    NewWeaponChance: 0.5
+    ExperiencePerLevel: 40
     UseFixedSeed: 0
     RandomSeed: 12345
     Weapons:
+    - {fileID: 11400000, guid: 5d779eade6324bb9992451d02ed2cbb7, type: 2}
     - {fileID: 11400000, guid: 47e0b2ff6cac447ca4aae2a52db3bb41, type: 2}
     - {fileID: 11400000, guid: 628ce16edbdb4b96b2e4bc4c6e5d804c, type: 2}
     CharacterTargetWeight: 1
-    WeaponTargetWeight: 1
+    WeaponTargetWeight: 3
     CharacterStats: 3
     WeaponStats: 63
     Rarities:
@@ -443,14 +444,14 @@ MonoBehaviour:
       Name: Common
       Weight: 70
       BonusPercents:
-        MaxHealth: 5
-        PickupRadius: 5
-        Damage: 3
-        AttackRate: 2
-        Range: 5
-        Size: 5
-        BlastRadius: 3
-        Lifetime: 2
+        MaxHealth: 10
+        PickupRadius: 10
+        Damage: 15
+        AttackRate: 10
+        Range: 10
+        Size: 10
+        BlastRadius: 10
+        Lifetime: 5
       Color: {r: 0.8, g: 0.8, b: 0.8, a: 1}
       BonusPercent: 5
       m_StatBonusesInitialized: 1
@@ -458,13 +459,13 @@ MonoBehaviour:
       Name: Rare
       Weight: 25
       BonusPercents:
-        MaxHealth: 10
-        PickupRadius: 10
-        Damage: 10
-        AttackRate: 10
-        Range: 10
-        Size: 10
-        BlastRadius: 10
+        MaxHealth: 15
+        PickupRadius: 15
+        Damage: 25
+        AttackRate: 20
+        Range: 15
+        Size: 15
+        BlastRadius: 20
         Lifetime: 10
       Color: {r: 0.25, g: 0.6, b: 1, a: 1}
       BonusPercent: 10
@@ -473,13 +474,13 @@ MonoBehaviour:
       Name: Epic
       Weight: 10
       BonusPercents:
-        MaxHealth: 15
-        PickupRadius: 15
-        Damage: 15
-        AttackRate: 15
-        Range: 15
-        Size: 15
-        BlastRadius: 15
+        MaxHealth: 25
+        PickupRadius: 25
+        Damage: 40
+        AttackRate: 30
+        Range: 20
+        Size: 20
+        BlastRadius: 30
         Lifetime: 15
       Color: {r: 0.8, g: 0.35, b: 1, a: 1}
       BonusPercent: 15
@@ -488,14 +489,14 @@ MonoBehaviour:
       Name: Legendary
       Weight: 5
       BonusPercents:
-        MaxHealth: 25
-        PickupRadius: 25
-        Damage: 25
-        AttackRate: 25
-        Range: 25
-        Size: 25
-        BlastRadius: 25
-        Lifetime: 25
+        MaxHealth: 40
+        PickupRadius: 35
+        Damage: 60
+        AttackRate: 45
+        Range: 30
+        Size: 30
+        BlastRadius: 40
+        Lifetime: 20
       Color: {r: 1, g: 0.6470588, b: 0, a: 1}
       BonusPercent: 25
       m_StatBonusesInitialized: 1
@@ -503,14 +504,14 @@ MonoBehaviour:
       Name: Ancient
       Weight: 1
       BonusPercents:
-        MaxHealth: 150
-        PickupRadius: 35
-        Damage: 35
-        AttackRate: 35
-        Range: 35
-        Size: 35
-        BlastRadius: 35
-        Lifetime: 35
+        MaxHealth: 50
+        PickupRadius: 50
+        Damage: 80
+        AttackRate: 60
+        Range: 40
+        Size: 40
+        BlastRadius: 50
+        Lifetime: 25
       Color: {r: 0.85, g: 0.75, b: 1, a: 1}
       BonusPercent: 35
       m_StatBonusesInitialized: 1
@@ -566,18 +567,18 @@ MonoBehaviour:
       m_StatBonusesInitialized: 0
   m_TemporaryZones:
     Enabled: 1
-    SpawnChance: 0.1
-    SpawnInterval: 10
+    SpawnChance: 0.25
+    SpawnInterval: 30
     MaxActiveZones: 1
-    Lifetime: 60
-    HoldDuration: 5
+    Lifetime: 45
+    HoldDuration: 3
     Radius: 3
     MinEdgeDistance: 2
     MaxEdgeDistance: 8
     ViewPadding: 1
     CharacterStats: 3
     WeaponStats: 63
-    BonusMultiplier: 1
+    BonusMultiplier: 1.5
     StructureTexture: {fileID: 2800000, guid: 9bef54652624d0549aa89e5e80c47c4d, type: 3}
     StructureUV:
       serializedVersion: 2

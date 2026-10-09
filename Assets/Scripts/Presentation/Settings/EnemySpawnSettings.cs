@@ -18,27 +18,27 @@ namespace GameHolder.PureDots
 
         [Header("Spawn Rate Scaling")]
         [Tooltip("Active run seconds between increases. Zero disables scaling.")]
-        [Min(0)] public float SpawnRateScalingInterval;
+        [Min(0)] public float SpawnRateScalingInterval = RunDefaults.Wave.SpawnRateScalingInterval;
         [Tooltip("Multiplies enemies per regular batch each scaling interval. 1.1 adds 10%, compounded.")]
-        [Min(1)] public float SpawnRateMultiplier = 1;
+        [Min(1)] public float SpawnRateMultiplier = RunDefaults.Wave.SpawnRateMultiplier;
 
         [Header("Enemy Stat Scaling")]
         [Tooltip("Active run seconds between increases. Applies to newly spawned enemies; zero disables scaling.")]
-        [Min(0)] public float StatScalingInterval;
+        [Min(0)] public float StatScalingInterval = RunDefaults.Wave.StatScalingInterval;
         [Tooltip("Health multiplier per scaling interval for newly spawned enemies. 1 disables health scaling.")]
-        [Min(1)] public float HealthMultiplier = 1;
+        [Min(1)] public float HealthMultiplier = RunDefaults.Wave.StatMultipliers.x;
         [Tooltip("Speed multiplier per scaling interval for newly spawned enemies. 1 disables speed scaling.")]
-        [Min(1)] public float SpeedMultiplier = 1;
+        [Min(1)] public float SpeedMultiplier = RunDefaults.Wave.StatMultipliers.y;
         [Tooltip("Scales both contact and ranged attack damage.")]
-        [Min(1)] public float DamageMultiplier = 1;
+        [Min(1)] public float DamageMultiplier = RunDefaults.Wave.StatMultipliers.z;
 
         [Header("Large Spawns")]
         [Tooltip("Enable additional periodic enemy batches alongside regular spawning.")]
-        public bool EnableLargeSpawns;
+        public bool EnableLargeSpawns = true;
         [Tooltip("Active run seconds between additional large batches; pauses stop this timer.")]
-        [Min(.01f)] public float LargeSpawnInterval = 30;
+        [Min(.01f)] public float LargeSpawnInterval = RunDefaults.Wave.LargeSpawnInterval;
         [Tooltip("Additional enemies per large spawn, subject to the shared enemy pool limit.")]
-        [Min(1)] public int LargeSpawnCount = 100;
+        [Min(1)] public int LargeSpawnCount = RunDefaults.Wave.LargeSpawnCount;
 
         public WaveSpawnerConfig ToConfig() => new WaveSpawnerConfig
         {
