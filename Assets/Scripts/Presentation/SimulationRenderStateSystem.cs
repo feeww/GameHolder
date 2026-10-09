@@ -23,7 +23,8 @@ namespace GameHolder.PureDots
                 Catalog = SystemAPI.GetSingleton<EnemyConfigCatalogSingleton>().Catalog }.ScheduleParallel(Dependency);
             Dependency = new ProjectileRenderJob { CameraY = snapshot.PlayerPosition.y }.ScheduleParallel(Dependency);
             Dependency = new GemRenderJob { CameraY = snapshot.PlayerPosition.y,
-                Dt = snapshot.InventoryOpen != 0 || snapshot.Rewards.Active != 0 ? 0 : SystemAPI.Time.DeltaTime,
+                Dt = snapshot.InventoryOpen != 0 || snapshot.Rewards.Active != 0 || snapshot.Zone.ReceiptActive != 0
+                    ? 0 : SystemAPI.Time.DeltaTime,
                 Generation = snapshot.Generation }.ScheduleParallel(Dependency);
             Dependency = new PlayerRenderJob { CameraY = snapshot.PlayerPosition.y }.Schedule(Dependency);
         }

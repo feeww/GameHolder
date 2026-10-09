@@ -8,11 +8,12 @@ namespace GameHolder.PureDots
     public struct RebuildSpatialGridJob : IJob
     {
         public SimulationAccess A;
+        public bool BuildCrowdCells;
         public void Execute()
         {
             if (A.Run[A.State].Paused) return;
             A.Grid.Clear();
-            A.CrowdCells.Clear();
+            if (BuildCrowdCells) A.CrowdCells.Clear();
             var run = A.Run[A.State];
             run.MaxEnemyStep = 0; run.MaxEnemyRadius = 0;
             // A single writer inserts in permanent pool order. Hash traversal is reproducible across worker counts.
@@ -31,6 +32,7 @@ namespace GameHolder.PureDots
                 A.Grid.Add(SpatialHashUtils.ComputeHash(cell), new GridEntry
                 { Entity = e, Position = position, PreviousPosition = previous, CellCoord = cell, Radius = radius,
                     PushPriority = priority, PoolIndex = i });
+                if (!BuildCrowdCells) continue;
                 A.CrowdCells.TryGetValue(cell, out var crowd);
                 crowd.Count++;
                 A.CrowdCells[cell] = crowd;

@@ -22,6 +22,7 @@ MonoBehaviour:
   ExperienceValue: 20
   ChestDropChance: 0.01
   SpawnWeight: 0.15
+  AvailableAfterSeconds: 0
   Ranged: 1
   Weapon: {fileID: 11400000, guid: 307a103368294d9a8955a425c25ff13a, type: 2}
   AttackRange: 13

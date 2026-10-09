@@ -1603,6 +1603,7 @@ namespace GameHolder.PureDots.Tests
     public partial struct GridTestSystem : ISystem
     {
         private SimulationAccess m_Access;
+        public bool GridOnly;
         public void OnCreate(ref SystemState state) => m_Access.Initialize(ref state);
         public void OnUpdate(ref SystemState state)
         {
@@ -1615,7 +1616,7 @@ namespace GameHolder.PureDots.Tests
             m_Access.GemPool = SystemAPI.GetSingleton<GemPoolSingleton>();
             var spatial = SystemAPI.GetSingleton<EnemySpatialGridSingleton>();
             m_Access.Grid = spatial.Grid; m_Access.CrowdCells = spatial.CrowdCells;
-            state.Dependency = new RebuildSpatialGridJob { A = m_Access }.Schedule(state.Dependency);
+            state.Dependency = new RebuildSpatialGridJob { A = m_Access, BuildCrowdCells = !GridOnly }.Schedule(state.Dependency);
             SystemAPI.SetSingleton(new SimulationJobFence { Handle = state.Dependency });
         }
     }

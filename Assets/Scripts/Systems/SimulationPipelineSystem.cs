@@ -200,7 +200,7 @@ namespace GameHolder.PureDots
             chain = new MoveProjectilesJob { RunState = m_ReadRun, State = m_Access.State, Dt = dt,
                 Lasers = m_ReadLasers, Explosives = m_ReadExplosives,
                 Deactivations = m_Access.Deactivations.AsParallelWriter() }.ScheduleParallel(chain);
-            chain = new RebuildSpatialGridJob { A = m_Access }.Schedule(chain);
+            chain = new RebuildSpatialGridJob { A = m_Access, BuildCrowdCells = true }.Schedule(chain);
             chain = new CrowdContactJob
             {
                 Entities = m_Access.EnemyPool.AllEnemies, Active = m_ReadEnemies,
@@ -211,13 +211,14 @@ namespace GameHolder.PureDots
             // Combat must see resolved contacts and include their displacement in relative projectile sweeps.
             chain = new RebuildSpatialGridJob { A = m_Access }.Schedule(chain);
             chain = new PlayerHitCheckJob { A = m_Access }.Schedule(chain);
-            chain = new EnemyProjectileHitJob { RunState = m_ReadRun, State = m_Access.State,
+            JobHandle enemyProjectileHits = new EnemyProjectileHitJob { RunState = m_ReadRun, State = m_Access.State,
                 Stats = m_ReadStats, Invulnerability = m_ReadInvulnerability,
                 Explosives = m_ReadExplosives, Lasers = m_ReadLasers,
                 Damage = m_Access.PlayerDamage.AsParallelWriter(), Deactivations = m_Access.Deactivations.AsParallelWriter() }.ScheduleParallel(chain);
-            chain = new ProjectileBroadphaseJob { RunState = m_ReadRun, State = m_Access.State, Grid = m_Access.Grid,
+            JobHandle playerProjectileHits = new ProjectileBroadphaseJob { RunState = m_ReadRun, State = m_Access.State, Grid = m_Access.Grid,
                 Explosives = m_ReadExplosives, Lasers = m_ReadLasers,
                 Damage = m_Access.Damage.AsParallelWriter(), Deactivations = m_Access.Deactivations.AsParallelWriter() }.ScheduleParallel(chain);
+            chain = JobHandle.CombineDependencies(enemyProjectileHits, playerProjectileHits);
             chain = new ExplosiveCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new LaserCombatJob { A = m_Access, AreaDamage = m_AreaDamage }.Schedule(chain);
             chain = new DamageResolutionJob { A = m_Access, Damage = m_Damage, Deactivations = m_Deactivations, AreaDamage = m_AreaDamage }.Schedule(chain);
