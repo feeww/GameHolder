@@ -13,6 +13,8 @@ namespace GameHolder.PureDots
     public partial struct SimulationBootstrapSystem : ISystem
     {
         private bool m_Initialized;
+        private AllocatorHelper<EventQueueAllocator> m_Damage, m_PlayerDamage, m_Deactivations, m_GemSpawns,
+            m_Deaths, m_Rebases, m_Reactions, m_Collections, m_Commands;
 
         [BurstCompile]
         public void OnCreate(ref SystemState state)
@@ -20,7 +22,6 @@ namespace GameHolder.PureDots
             m_Initialized = false;
         }
 
-        [BurstCompile]
         public void OnUpdate(ref SystemState state)
         {
             if (m_Initialized) return;
@@ -60,35 +61,35 @@ namespace GameHolder.PureDots
             var damageQueueEntity = em.CreateEntity();
             em.AddComponentData(damageQueueEntity, new DamageEventQueueSingleton
             {
-                DamageQueue = new UnsafeQueue<DamageEvent>(Allocator.Persistent)
+                DamageQueue = EventQueueAllocator.CreateQueue<DamageEvent>(limits.MaxPlayerProjectiles + maxEnemies, true, out m_Damage)
             });
 
             var playerDamageQueueEntity = em.CreateEntity();
             em.AddComponentData(playerDamageQueueEntity, new PlayerDamageEventQueueSingleton
             {
-                PlayerDamageQueue = new UnsafeQueue<PlayerDamageEvent>(Allocator.Persistent)
+                PlayerDamageQueue = EventQueueAllocator.CreateQueue<PlayerDamageEvent>(limits.MaxEnemyProjectiles + 1, true, out m_PlayerDamage)
             });
 
             var projDeactEntity = em.CreateEntity();
             em.AddComponentData(projDeactEntity, new ProjectileDeactivationQueueSingleton
             {
-                StagedDeactivations = new UnsafeQueue<Entity>(Allocator.Persistent)
+                StagedDeactivations = EventQueueAllocator.CreateQueue<Entity>((limits.MaxPlayerProjectiles + limits.MaxEnemyProjectiles) * 2, true, out m_Deactivations)
             });
 
             var gemSpawnQueueEntity = em.CreateEntity();
             em.AddComponentData(gemSpawnQueueEntity, new GemSpawnQueueSingleton
             {
-                SpawnQueue = new UnsafeQueue<GemSpawnRequest>(Allocator.Persistent)
+                SpawnQueue = EventQueueAllocator.CreateQueue<GemSpawnRequest>(maxEnemies * 2, false, out m_GemSpawns)
             });
 
             // 7. Presentation bridge queues
             var bridgeEntity = em.CreateEntity();
             em.AddComponentData(bridgeEntity, new SimulationBridgeQueuesSingleton
             {
-                DeathEventQueue = new UnsafeQueue<DeathEvent>(Allocator.Persistent),
-                RebaseEventQueue = new UnsafeQueue<OriginRebaseEvent>(Allocator.Persistent),
-                HitReactionEventQueue = new UnsafeQueue<PlayerHitReactionEvent>(Allocator.Persistent),
-                GemCollectEventQueue = new UnsafeQueue<GemCollectEvent>(Allocator.Persistent)
+                DeathEventQueue = EventQueueAllocator.CreateQueue<DeathEvent>(SimulationConstants.CosmeticQueueCapacity, false, out m_Deaths),
+                RebaseEventQueue = EventQueueAllocator.CreateQueue<OriginRebaseEvent>(SimulationConstants.CosmeticQueueCapacity, false, out m_Rebases),
+                HitReactionEventQueue = EventQueueAllocator.CreateQueue<PlayerHitReactionEvent>(SimulationConstants.CosmeticQueueCapacity, false, out m_Reactions),
+                GemCollectEventQueue = EventQueueAllocator.CreateQueue<GemCollectEvent>(SimulationConstants.CosmeticQueueCapacity, false, out m_Collections)
             });
 
             // 8. Experience gems and artifact chests
@@ -224,7 +225,8 @@ namespace GameHolder.PureDots
                 WeaponCount = 1, WeaponCapacity = SystemAPI.GetSingleton<RewardCatalogSingleton>().Catalog.Value.MaxWeapons });
             em.AddComponentData(runEntity, new SimulationJobFence());
             em.AddComponentData(em.CreateEntity(), new SimulationInput());
-            em.AddComponentData(em.CreateEntity(), new SimulationCommandQueue { Commands = new UnsafeQueue<SimulationCommand>(Allocator.Persistent) });
+            em.AddComponentData(em.CreateEntity(), new SimulationCommandQueue
+            { Commands = EventQueueAllocator.CreateQueue<SimulationCommand>(SimulationConstants.CommandQueueCapacity, false, out m_Commands) });
         }
 
         public static PureDotsPrefabsSingleton CreatePrefabs(EntityManager em, StartingPlayerConfig startingPlayer)
@@ -283,7 +285,6 @@ namespace GameHolder.PureDots
             return projectile;
         }
 
-        [BurstCompile]
         public void OnDestroy(ref SystemState state)
         {
             state.EntityManager.CompleteAllTrackedJobs();
@@ -410,6 +411,18 @@ namespace GameHolder.PureDots
                 if (bridge.HitReactionEventQueue.IsCreated) bridge.HitReactionEventQueue.Dispose();
                 if (bridge.GemCollectEventQueue.IsCreated) bridge.GemCollectEventQueue.Dispose();
             }
+            if (m_Initialized)
+            {
+                DisposeAllocator(m_Damage); DisposeAllocator(m_PlayerDamage); DisposeAllocator(m_Deactivations);
+                DisposeAllocator(m_GemSpawns); DisposeAllocator(m_Deaths); DisposeAllocator(m_Rebases);
+                DisposeAllocator(m_Reactions); DisposeAllocator(m_Collections); DisposeAllocator(m_Commands);
+            }
+        }
+
+        private static void DisposeAllocator(AllocatorHelper<EventQueueAllocator> owner)
+        {
+            owner.Allocator.Dispose();
+            owner.Dispose();
         }
     }
 }

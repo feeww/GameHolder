@@ -119,3 +119,7 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 /Assets/GameplayAuthoring.md
+
+# Profile Analyzer data dumps
+ProfileAnalyzer/
+*.pdata

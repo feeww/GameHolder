@@ -123,6 +123,10 @@ namespace GameHolder.PureDots
 
         private void Awake()
         {
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
+            Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen;
+
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             if (m_EnemyDeathClip == null) { m_EnemyDeathClip = PureDotsAudioGenerator.CreateEnemyDeathClip(); m_OwnEnemyClip = true; }

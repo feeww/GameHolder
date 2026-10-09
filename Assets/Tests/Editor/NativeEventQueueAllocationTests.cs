@@ -1,9 +1,10 @@
 using System;
-using System.Threading;
 using NUnit.Framework;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
+using Unity.Jobs;
+using Unity.Jobs.LowLevel.Unsafe;
 using Unity.Mathematics;
 using Unity.Transforms;
 
@@ -12,17 +13,18 @@ namespace GameHolder.PureDots.Tests
     public partial class SimulationRegressionTests
     {
         [Test]
-        public void NativeEventQueuesReportAllocationsAfterWarmupWithHitsDeathsAndXpBursts()
+        public void NativeEventQueuesReusePreallocatedStorageWithHitsDeathsAndXpBursts()
         {
-            using var damage = new EventQueueAllocationProbe<DamageEvent>();
-            using var playerDamage = new EventQueueAllocationProbe<PlayerDamageEvent>();
-            using var deactivations = new EventQueueAllocationProbe<Entity>();
-            using var spawns = new EventQueueAllocationProbe<GemSpawnRequest>();
-            using var commands = new EventQueueAllocationProbe<SimulationCommand>();
-            using var deaths = new EventQueueAllocationProbe<DeathEvent>();
-            using var rebases = new EventQueueAllocationProbe<OriginRebaseEvent>();
-            using var reactions = new EventQueueAllocationProbe<PlayerHitReactionEvent>();
-            using var collects = new EventQueueAllocationProbe<GemCollectEvent>();
+            var limits = PoolLimits.Defaults;
+            using var damage = new EventQueueAllocationProbe<DamageEvent>(limits.MaxPlayerProjectiles + limits.MaxEnemies, true);
+            using var playerDamage = new EventQueueAllocationProbe<PlayerDamageEvent>(limits.MaxEnemyProjectiles + 1, true);
+            using var deactivations = new EventQueueAllocationProbe<Entity>((limits.MaxPlayerProjectiles + limits.MaxEnemyProjectiles) * 2, true);
+            using var spawns = new EventQueueAllocationProbe<GemSpawnRequest>(limits.MaxEnemies * 2, false);
+            using var commands = new EventQueueAllocationProbe<SimulationCommand>(SimulationConstants.CommandQueueCapacity, false);
+            using var deaths = new EventQueueAllocationProbe<DeathEvent>(SimulationConstants.CosmeticQueueCapacity, false);
+            using var rebases = new EventQueueAllocationProbe<OriginRebaseEvent>(SimulationConstants.CosmeticQueueCapacity, false);
+            using var reactions = new EventQueueAllocationProbe<PlayerHitReactionEvent>(SimulationConstants.CosmeticQueueCapacity, false);
+            using var collects = new EventQueueAllocationProbe<GemCollectEvent>(SimulationConstants.CosmeticQueueCapacity, false);
             Entity damageEntity = m_Em.CreateEntityQuery(typeof(DamageEventQueueSingleton)).GetSingletonEntity();
             Entity playerDamageEntity = m_Em.CreateEntityQuery(typeof(PlayerDamageEventQueueSingleton)).GetSingletonEntity();
             Entity deactivationEntity = m_Em.CreateEntityQuery(typeof(ProjectileDeactivationQueueSingleton)).GetSingletonEntity();
@@ -156,55 +158,63 @@ namespace GameHolder.PureDots.Tests
 
     internal sealed class EventQueueAllocationProbe<T> : IDisposable where T : unmanaged
     {
-        private AllocatorHelper<EventQueueAllocationCounter> m_Helper = new AllocatorHelper<EventQueueAllocationCounter>(Allocator.Persistent);
+        private AllocatorHelper<EventQueueAllocator> m_Helper;
         public UnsafeQueue<T> Queue;
-        public EventQueueAllocationProbe()
+        public EventQueueAllocationProbe(int capacity, bool parallel)
         {
-            Queue = new UnsafeQueue<T>(m_Helper.Allocator.Handle);
-            Assert.That(m_Helper.Allocator.Allocations, Is.GreaterThan(0), "The probe must observe the queue's native header allocation.");
+            Queue = EventQueueAllocator.CreateQueue<T>(capacity, parallel, out m_Helper);
+            Assert.That(m_Helper.Allocator.BlocksAllocated, Is.EqualTo(1));
         }
         public void BeginSample()
         {
             Assert.That(Queue.Count, Is.Zero);
-            m_Helper.Allocator.Allocations = m_Helper.Allocator.Frees = 0;
-            m_Helper.Allocator.Bytes = 0;
+            Assert.That(m_Helper.Allocator.BlocksAllocated, Is.EqualTo(1), "Warmup must fit the preallocated arena.");
         }
         public void Report(string phase)
         {
             Assert.That(Queue.Count, Is.Zero);
-            Assert.That(m_Helper.Allocator.Frees, Is.EqualTo(m_Helper.Allocator.Allocations), "Drained queue blocks must be released.");
-            TestContext.WriteLine($"NativeEventQueue phase={phase} event={typeof(T).Name} allocations={m_Helper.Allocator.Allocations} " +
-                $"frees={m_Helper.Allocator.Frees} requestedBytes={m_Helper.Allocator.Bytes}");
+            Assert.That(m_Helper.Allocator.BlocksAllocated, Is.EqualTo(1), "Drained queue blocks must reuse the preallocated arena.");
+            TestContext.WriteLine($"NativeEventQueue phase={phase} event={typeof(T).Name} additionalBackingAllocations={m_Helper.Allocator.BlocksAllocated - 1}");
         }
-        public void Dispose() { Queue.Dispose(); m_Helper.Dispose(); }
+        public void Dispose() { Queue.Dispose(); m_Helper.Allocator.Dispose(); m_Helper.Dispose(); }
     }
 
-    [BurstCompile]
-    internal struct EventQueueAllocationCounter : AllocatorManager.IAllocator
+    public class EventQueueStorageTests
     {
-        public AllocatorManager.AllocatorHandle Handle { get; set; }
-        public Allocator ToAllocator => Handle.ToAllocator;
-        public bool IsCustomAllocator => Handle.IsCustomAllocator;
-        public AllocatorManager.TryFunction Function => Allocate;
-        public int Allocations, Frees;
-        public long Bytes;
-        public int Try(ref AllocatorManager.Block block)
+        [TestCase(1)] [TestCase(4)]
+        public void ParallelFillDrainAndClearRetainStorageAndEveryEvent(int workers)
         {
-            bool allocating = block.Range.Pointer == IntPtr.Zero;
-            long bytes = block.Bytes;
-            var original = block.Range.Allocator; block.Range.Allocator = Allocator.Persistent;
-            int error = AllocatorManager.Try(ref block); block.Range.Allocator = original;
-            if (error == 0)
+            int originalWorkers = JobsUtility.JobWorkerCount;
+            const int capacity = 10000;
+            var queue = EventQueueAllocator.CreateQueue<DamageEvent>(capacity, true, out var owner);
+            try
             {
-                if (allocating) { Interlocked.Increment(ref Allocations); Interlocked.Add(ref Bytes, bytes); }
-                else Interlocked.Increment(ref Frees);
+                JobsUtility.JobWorkerCount = Math.Min(workers, JobsUtility.JobWorkerMaximumCount);
+                for (int cycle = 0; cycle < 32; cycle++)
+                {
+                    new FillQueueJob { Queue = queue.AsParallelWriter() }.Schedule(capacity, 1).Complete();
+                    Assert.That(queue.Count, Is.EqualTo(capacity));
+                    var seen = new bool[capacity];
+                    while (queue.TryDequeue(out var item))
+                    {
+                        Assert.That(seen[item.TargetKey], Is.False);
+                        seen[item.TargetKey] = true;
+                    }
+                    Assert.That(seen, Is.All.True);
+                    new FillQueueJob { Queue = queue.AsParallelWriter() }.Schedule(capacity, 1).Complete();
+                    queue.Clear();
+                    Assert.That(queue.Count, Is.Zero);
+                    Assert.That(owner.Allocator.BlocksAllocated, Is.EqualTo(1));
+                }
             }
-            return error;
+            finally { JobsUtility.JobWorkerCount = originalWorkers; queue.Dispose(); owner.Allocator.Dispose(); owner.Dispose(); }
         }
-        [BurstCompile(CompileSynchronously = true)]
-        [AOT.MonoPInvokeCallback(typeof(AllocatorManager.TryFunction))]
-        private static unsafe int Allocate(IntPtr state, ref AllocatorManager.Block block)
-            => ((EventQueueAllocationCounter*)state)->Try(ref block);
-        public void Dispose() => Handle.Dispose();
+
+        [BurstCompile]
+        private struct FillQueueJob : IJobParallelFor
+        {
+            public UnsafeQueue<DamageEvent>.ParallelWriter Queue;
+            public void Execute(int index) => Queue.Enqueue(new DamageEvent { TargetKey = (ulong)index });
+        }
     }
 }

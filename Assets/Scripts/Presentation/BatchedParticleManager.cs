@@ -26,8 +26,6 @@ namespace GameHolder.PureDots
             }
             Instance = this;
 
-            m_ParticlesBuffer = new ParticleSystem.Particle[PresentationConstants.ParticleCapacity];
-
             if (m_DeathParticleSystem == null)
             {
                 m_DeathParticleSystem = CreateProceduralParticleSystem("ProceduralDeathFX", PresentationConstants.DeathParticleColor, PresentationConstants.DeathParticleSize, PresentationConstants.DeathParticleSpeed);
@@ -40,6 +38,9 @@ namespace GameHolder.PureDots
             {
                 m_GemCollectParticleSystem = CreateProceduralParticleSystem("ProceduralGemFX", PresentationConstants.GemParticleColor, PresentationConstants.GemParticleSize, PresentationConstants.GemParticleSpeed);
             }
+            int capacity = Mathf.Max(m_DeathParticleSystem.main.maxParticles,
+                Mathf.Max(m_HitParticleSystem.main.maxParticles, m_GemCollectParticleSystem.main.maxParticles));
+            m_ParticlesBuffer = new ParticleSystem.Particle[capacity];
         }
 
         private ParticleSystem CreateProceduralParticleSystem(string sysName, Color color, float startSize, float startSpeed)
@@ -146,8 +147,6 @@ namespace GameHolder.PureDots
 
             int count = ps.particleCount;
             if (count == 0) return;
-
-            count = Mathf.Min(count, m_ParticlesBuffer.Length);
 
             int alive = ps.GetParticles(m_ParticlesBuffer, count);
             for (int i = 0; i < alive; i++)
